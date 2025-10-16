@@ -10,6 +10,17 @@ import tempfile
 
 STATIC_ROOT = Path("static")
 
+_pdf_cache = {}
+
+def _get_pdf_reader(path_or_url):
+    if path_or_url in _pdf_cache:
+        return _pdf_cache[path_or_url]
+    # ... same as before ...
+    reader = PdfReader(tmp.name)
+    _pdf_cache[path_or_url] = reader
+    return reader
+
+
 def _make_cover_pdf(list_items, title="Generated Practice Questions"):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
