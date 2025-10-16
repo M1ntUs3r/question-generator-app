@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Study Practice Generator</title>
+  <!-- Select2 CSS + JS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background-color: #f7f8fa;
+      color: #333;
+    }
+    h1 {
+      color: #2b6cb0;
+    }
+    form {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 400px;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    select, input, button {
+      width: 100%;
+      margin-top: 5px;
+      padding: 8px;
+      font-size: 14px;
+    }
+    button {
+      background-color: #2b6cb0;
+      color: white;
+      border: none;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2c5282;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎓 Study Practice Generator</h1>
+  <form action="/generate" method="post">
+    <label>Topic</label>
+    <select id="topic" name="topic" multiple onchange="updateYears()">
+      <option value="">All topics</option>
+    {% for t in topics %}
+    <option value="{{ t }}">{{ t }}</option>
+      {% endfor %}
+    </select>
+
+
+    <label>Paper</label>
+    <select name="paper">
+      <option value="">All papers</option>
+      <option value="P1">Paper 1 (Non-Calculator)</option>
+      <option value="P2">Paper 2 (Calculator)</option>
+    </select>
+
+
+    <label>Exam Year</label>
+    <select id="year" name="year" multiple>
+      <option value="">All years</option>
+      {% for y in years %}
+        <option value="{{ y }}">{{ y }}</option>
+      {% endfor %}
+    </select>
+    
+    <label>Number of Questions</label>
+    <input type="number" name="num_questions" min="1" value="5">
+
+    <button type="submit">Generate Questions</button>
+  </form>
+  <script>
+  // 1️⃣  When the page is ready, turn our plain <select> menus into
+  //     beautiful Select2 dropdowns
+  $(document).ready(function() {
+    $('#topic').select2({
+      placeholder: "Choose topics",
+      width: '100%'
+    });
+    $('#year').select2({
+      placeholder: "Choose years",
+      width: '100%'
+    });
+  });
+
+  // 2️⃣  Whenever someone changes the Topic selection,
+  //     fetch the available years for those topics
+  function updateYears() {
+    // grab all selected topics
+    const topicSelect = document.getElementById('topic');
+    const selectedTopics = Array.from(topicSelect.selectedOptions).map(opt => opt.value);
+
+    // find the Year dropdown
+    const yearSelect = document.getElementById('year');
+    yearSelect.innerHTML = '<option value="">Loading...</option>';
+
+    // send topics to Flask (comma-separated)
+    fetch(`/get_years?topic=${encodeURIComponent(selectedTopics.join(','))}`)
+      .then(response => response.json())
+      .then(years => {
+        console.log('Loading years for topics:', selectedTopics);  // debug
+        // clear and rebuild the Year dropdown
+        yearSelect.innerHTML = '';
+        years.forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
+
+        // tell Select2 we changed the dropdown
+        $('#year').trigger('change.select2');
+      })
+      .catch(err => {
+        console.error('Error loading years:', err);
+        yearSelect.innerHTML = '<option value="">Error loading years</option>';
+      });
+  }
+</script>
+
+</body>
+</html>
+

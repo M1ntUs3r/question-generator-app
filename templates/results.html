@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Generated Question List</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 30px;
+      background: #f9fafc;
+      color: #333;
+    }
+    h1 {
+      color: #2b6cb0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #f1f4f8;
+      font-weight: 600;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .actions {
+      margin-top: 25px;
+    }
+    button {
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    button:hover {
+      background: #1a4e8a;
+    }
+    a.back {
+      display: inline-block;
+      margin-top: 20px;
+      color: #2b6cb0;
+      text-decoration: none;
+    }
+    a.back:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 Your Random Question Set</h1>
+
+  <form method="post" action="/download">
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Paper</th>
+          <th>Question</th>
+          <th>Topic</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+        <tr>
+          <td>{{ q.year }}</td>
+          <td>{{ q.paper }}</td>
+          <td>
+            {% set qid = q.question_id %}
+            {% if qid %}
+              {{ qid[-3:] if qid[-3:].startswith("Q") else (qid[-2:]) }}
+            {% else %}
+              Q?
+            {% endif %}
+          </td>
+          <td>{{ q.topic }}</td>
+        </tr>
+        <input type="hidden" name="qid" value="{{ q.question_id }}">
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="actions">
+      <button type="submit">📘 Download PDF (Questions + Answers)</button>
+    </div>
+  </form>
+
+  <a href="/" class="back">← Back to Generator</a>
+</body>
+</html>
