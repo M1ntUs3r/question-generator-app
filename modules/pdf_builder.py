@@ -82,14 +82,14 @@ def _get_pdf_reader(path_or_url):
 
     # for each selected question: extract its pages if present, else append full PDF
     for q in selected_questions:
-    src = q.get("pdf_question")
-    pdfq = STATIC_ROOT / src if not str(src).startswith("http") else src
-    reader = _get_pdf_reader(pdfq)
-    if reader:
-        pages = _parse_page_spec(q["q_pages"]) if q.get("q_pages") else range(len(reader.pages))
-        for idx in pages:
-            if 0 <= idx < len(reader.pages):
-                writer.add_page(reader.pages[idx])
+        src = q.get("pdf_question")
+        pdfq = STATIC_ROOT / src if not str(src).startswith("http") else src
+        reader = _get_pdf_reader(pdfq)
+        if reader:
+            pages = _parse_page_spec(q["q_pages"]) if q.get("q_pages") else range(len(reader.pages))
+            for idx in pages:
+                if 0 <= idx < len(reader.pages):
+                    writer.add_page(reader.pages[idx])
 
         elif pdfq.exists():
             # append whole file if no page info
