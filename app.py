@@ -51,5 +51,8 @@ def download():
     buf = build_pdf(selected, include_solutions=True)
     return send_file(buf, as_attachment=True, download_name="generated_questions.pdf", mimetype="application/pdf")
 
+import os
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Render assigns a port dynamically
+    app.run(host="0.0.0.0", port=port, debug=False)
