@@ -5,6 +5,8 @@ from io import BytesIO
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 import re
+import requests
+import tempfile
 
 STATIC_ROOT = Path("static")
 
@@ -46,25 +48,38 @@ def _parse_page_spec(spec):
                 continue
     return sorted(pages)
 
-def build_pdf(selected_questions, include_solutions=True, out_path=None):
-    list_items = []
-    for q in selected_questions:
-        list_items.append(f"{q.get('year','')} {q.get('paper','')} — {q.get('topic','')} — {q.get('question_id','')}")
-    cover = _make_cover_pdf(list_items)
-    writer = PdfWriter()
-    # append cover
-    cov = PdfReader(cover)
-    for p in cov.pages:
-        writer.add_page(p)
+def _get_pdf_reader(path_or_url):
+    """Return a PdfReader for either a local path or a web URL."""
+    from pypdf import PdfReader
+    if isinstance(path_or_url, Path):
+        if path_or_url.exists():
+            return PdfReader(str(path_or_url))
+        else:
+            return None
+    elif isinstance(path_or_url, str) and path_or_url.lower().startswith("http"):
+        try:
+            r = requests.get(path_or_url, timeout=20)
+            if r.status_code == 200:
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+                tmp.write(r.content)
+                tmp.flush()
+                return PdfReader(tmp.name)
+        except Exception as e:
+            print("⚠️ Error downloading PDF:", path_or_url, e)
+    return None
+
 
     # for each selected question: extract its pages if present, else append full PDF
     for q in selected_questions:
-        pdfq = STATIC_ROOT / q.get("pdf_question")
-        if pdfq.exists() and q.get("q_pages"):
-            reader = PdfReader(str(pdfq))
-            for idx in _parse_page_spec(q["q_pages"]):
-                if 0 <= idx < len(reader.pages):
-                    writer.add_page(reader.pages[idx])
+    src = q.get("pdf_question")
+    pdfq = STATIC_ROOT / src if not str(src).startswith("http") else src
+    reader = _get_pdf_reader(pdfq)
+    if reader:
+        pages = _parse_page_spec(q["q_pages"]) if q.get("q_pages") else range(len(reader.pages))
+        for idx in pages:
+            if 0 <= idx < len(reader.pages):
+                writer.add_page(reader.pages[idx])
+
         elif pdfq.exists():
             # append whole file if no page info
             reader = PdfReader(str(pdfq))
@@ -72,14 +87,16 @@ def build_pdf(selected_questions, include_solutions=True, out_path=None):
                 writer.add_page(p)
 
     # append solutions if requested (use s_pages if present)
-    if include_solutions:
-        for q in selected_questions:
-            pdfs = STATIC_ROOT / q.get("pdf_solution")
-            if pdfs.exists() and q.get("s_pages"):
-                r = PdfReader(str(pdfs))
-                for idx in _parse_page_spec(q["s_pages"]):
-                    if 0 <= idx < len(r.pages):
-                        writer.add_page(r.pages[idx])
+  for q in selected_questions:
+    src = q.get("pdf_solution")
+    pdfs = STATIC_ROOT / src if not str(src).startswith("http") else src
+    reader = _get_pdf_reader(pdfs)
+    if reader:
+        pages = _parse_page_spec(q["s_pages"]) if q.get("s_pages") else range(len(reader.pages))
+        for idx in pages:
+            if 0 <= idx < len(reader.pages):
+                writer.add_page(reader.pages[idx])
+
             elif pdfs.exists():
                 r = PdfReader(str(pdfs))
                 for p in r.pages:
