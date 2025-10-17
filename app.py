@@ -45,7 +45,7 @@ def generate():
     import random
     selected = filtered if len(filtered) <= n else random.sample(filtered, n)
     paper_order = {"P1": 1, "P2": 2, "": 3} 
-   elected.sort(key=lambda q: (int(q["year"]) if q["year"] else 0, paper_order.get(q["paper"], 3)))
+    selected.sort(key=lambda q: (int(q["year"]) if q["year"] else 0, paper_order.get(q["paper"], 3)))
     return render_template("results.html", questions=selected)
 
 @app.route("/download", methods=["POST"])
