@@ -11,68 +11,36 @@ import re
 import pandas as pd
 
 def _parse_header_token(header):
-    """Return (year, paper) parsed from header string."""
+    """Optional: parse year/paper if needed"""
     s = str(header).strip()
-    # find a 4-digit year
     year_match = re.search(r'(20\d{2}|19\d{2})', s)
     year = year_match.group(0) if year_match else ""
-
-    # look for P1, P2, Paper 1, Paper2, or standalone '1'/'2' that likely mean paper
     paper = ""
-    # common patterns
     if re.search(r'\bP(?:aper)?\s*1\b', s, re.IGNORECASE) or re.search(r'\bP1\b', s, re.IGNORECASE):
         paper = "P1"
     elif re.search(r'\bP(?:aper)?\s*2\b', s, re.IGNORECASE) or re.search(r'\bP2\b', s, re.IGNORECASE):
         paper = "P2"
-    # sometimes header like "P1 2023" or "2023 P1" or just "1" or "2"
-    elif re.search(r'\b1\b', s) and not year_match:
-        # if there's a bare 1 and no year, interpret as P1
-        paper = "P1"
-    elif re.search(r'\b2\b', s) and not year_match:
-        paper = "P2"
-    # detect calculator keywords
-    elif re.search(r'calc(?:ulator)?', s, re.IGNORECASE):
-        # try to infer which paper is calculator in your convention
-        paper = "P2"  # common convention: P2 = calculator
-    elif re.search(r'non[-\s]?calc|noncalc|non calculator|no calc', s, re.IGNORECASE):
-        paper = "P1"
-    # fallback: if nothing found, try to pick 'P1' if header contains '1' anywhere (likely), else leave blank
-    if not paper:
-        if re.search(r'1', s):
-            paper = "P1"
-        elif re.search(r'2', s):
-            paper = "P2"
-
     return year, paper
 
 def load_questions():
-    """Load questions from EXCEL_FILE and return structured list with topic, year, paper, question."""
-    df = pd.read_excel(EXCEL_FILE, header=0)
-    # topic names (rows, after header row)
-    topics = df.iloc[1:, 0].dropna().tolist()
-    raw_headers = df.iloc[0, 1:].tolist()  # the column headers after first column
-    data = df.iloc[1:, 1:]                 # the question cells
-
-    # parse headers into (year, paper)
-    header_info = []
-    for h in raw_headers:
-        year, paper = _parse_header_token(h)
-        header_info.append({"raw": str(h), "year": year, "paper": paper})
-
+    """Load questions with solutions from spreadsheet."""
+    df = pd.read_excel(EXCEL_FILE, engine="odf")  # or openpyxl if xlsx
     questions = []
-    for topic_idx, topic in enumerate(topics):
-        for col_idx, info in enumerate(header_info):
-            cell_value = data.iloc[topic_idx, col_idx]
-            if pd.notna(cell_value):
-                questions.append({
-                    "topic": str(topic).strip(),
-                    "year": info["year"] or "",   # possibly empty if not detected
-                    "paper": info["paper"] or "", # possibly empty if not detected
-                    "question": str(cell_value).strip(),
-                    "col_header": info["raw"]
-                })
-    return questions
 
+    for idx, row in df.iterrows():
+        question = {
+            "topic": str(row.get("topic", "")).strip(),
+            "year": str(row.get("year", "")).strip(),
+            "paper": str(row.get("paper", "")).strip(),
+            "question_id": str(row.get("question_ID", "")).strip(),
+            "pdf_question": str(row.get("PDF Question", "")).strip(),
+            "pdf_solution": str(row.get("PDF Solution", "")).strip(),
+            "q_pages": str(row.get("Q_Pages", "")).strip(),
+            "s_pages": str(row.get("S_pages", "")).strip(),
+        }
+        questions.append(question)
+
+    return questions
 
 
 
