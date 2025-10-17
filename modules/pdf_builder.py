@@ -16,13 +16,13 @@ def _make_cover_pdf(list_items, title="Generated Practice Questions"):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("Helvetica-Bold", 18)
     c.drawString(40, h - 60, title)
-    c.setFont("Helvetica", 11)
-    y = h - 90
+    c.setFont("Helvetica", 12)
+    y = h - 100
     for i, li in enumerate(list_items, 1):
         c.drawString(40, y, f"{i}. {li}")
-        y -= 14
+        y -= 18
         if y < 60:
             c.showPage()
             y = h - 60
@@ -63,14 +63,12 @@ def _get_pdf_reader(path_or_url):
             cache_dir = STATIC_ROOT / "cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Filename-safe hash for URL
             url_hash = hashlib.sha1(path_or_url.encode("utf-8")).hexdigest()
             cached_file = cache_dir / f"{url_hash}.pdf"
 
             if cached_file.exists():
                 return PdfReader(str(cached_file))
 
-            # Download and cache
             r = requests.get(path_or_url, timeout=30)
             if r.status_code == 200 and "pdf" in r.headers.get("content-type", "").lower():
                 with open(cached_file, "wb") as f:
@@ -95,20 +93,29 @@ def _get_pdf_reader(path_or_url):
 
 
 def build_pdf(selected_questions, include_solutions=True):
-    """Builds a single PDF in memory with all questions first, then solutions."""
+    """Builds a PDF in memory with a cover page, all questions first, then solutions."""
     writer = PdfWriter()
     buf = BytesIO()
+
+    # 0️⃣ Make a front cover page with question list
+    question_titles = [
+        f"{q['year']} {q['paper']} – {q.get('topic','')} – {q.get('question_id','')}" 
+        for q in selected_questions
+    ]
+    cover_buf = _make_cover_pdf(question_titles)
+    cover_reader = PdfReader(cover_buf)
+    for p in cover_reader.pages:
+        writer.add_page(p)
 
     def safe_pages(pdf_path, pages_str):
         reader = _get_pdf_reader(pdf_path)
         if not reader:
             return None, []
         pages = _parse_page_spec(pages_str)
-        # Filter out invalid pages
         pages = [p for p in pages if 0 <= p < len(reader.pages)]
         return reader, pages
 
-    # 1️⃣ Questions first
+    # 1️⃣ Add all question pages
     for q in selected_questions:
         if not q.get("pdf_question") or not q.get("q_pages"):
             continue
@@ -118,7 +125,7 @@ def build_pdf(selected_questions, include_solutions=True):
         for p in pages:
             writer.add_page(reader.pages[p])
 
-    # 2️⃣ Solutions after
+    # 2️⃣ Add all solution pages
     if include_solutions:
         for q in selected_questions:
             if not q.get("pdf_solution") or not q.get("s_pages"):
