@@ -56,7 +56,7 @@ def download():
     if not selected:
         abort(400, "No questions selected")
     buf = build_pdf(selected, include_solutions=True)
-    return send_file(buf, as_attachment=True, download_name="generated_questions.pdf", mimetype="application/pdf")
+    return send_file(buf, as_attachment=False, mimetype="application/pdf")
 
 import os
 
