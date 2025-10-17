@@ -44,6 +44,7 @@ def generate():
         filtered = qs
     import random
     selected = filtered if len(filtered) <= n else random.sample(filtered, n)
+    selected.sort(key=lambda q: q["year"])
     return render_template("results.html", questions=selected)
 
 @app.route("/download", methods=["POST"])
