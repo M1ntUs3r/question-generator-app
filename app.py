@@ -2,6 +2,9 @@
 from flask import Flask, render_template, request, jsonify, send_file, abort
 from modules.data_handler import load_questions
 from modules.pdf_builder import build_pdf
+from flask_compress import Compress
+Compress(app)
+
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24 * 30  # 30 days
