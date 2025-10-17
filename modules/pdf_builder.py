@@ -98,62 +98,29 @@ def _get_pdf_reader(path_or_url):
         print(f"⚠️ Error reading PDF {path_or_url}: {e}")
         return None
 
-
-def build_pdf(selected_questions, include_solutions=True, out_path=None):
-    """Builds a merged PDF of all selected questions and optional solutions."""
-    list_items = []
-    for q in selected_questions:
-        qid = q.get("question_id", "")
-        qshort = qid[-3:] if len(qid) > 3 else qid
-        list_items.append(f"{q.get('year', '')} {q.get('paper', '')} — {q.get('topic', '')} — {qshort}")
-
-    # Create cover
-    cover = _make_cover_pdf(list_items)
+def build_pdf(selected_questions, include_solutions=True):
+    from PyPDF2 import PdfReader, PdfWriter
     writer = PdfWriter()
-    for p in PdfReader(cover).pages:
-        writer.add_page(p)
 
-    # Append question pages
     for q in selected_questions:
-        pdfq = q.get("pdf_question")
-        pages = _parse_page_spec(q.get("q_pages", ""))
-        reader = _get_pdf_reader(pdfq)
-        if not reader:
-            continue
-        if pages:
-            for idx in pages:
-                if 0 <= idx < len(reader.pages):
-                    writer.add_page(reader.pages[idx])
-        else:
-            for p in reader.pages:
-                writer.add_page(p)
+        # Add question pages
+        q_pdf = PdfReader(q["pdf_question"])
+        q_pages = [int(p)-1 for p in q["q_pages"].split(",") if p.strip()]
+        for p in q_pages:
+            writer.add_page(q_pdf.pages[p])
 
-    # Append solution pages
-    if include_solutions:
-        for q in selected_questions:
-            pdfs = q.get("pdf_solution")
-            pages = _parse_page_spec(q.get("s_pages", ""))
-            reader = _get_pdf_reader(pdfs)
-            if not reader:
-                continue
-            if pages:
-                for idx in pages:
-                    if 0 <= idx < len(reader.pages):
-                        writer.add_page(reader.pages[idx])
-            else:
-                for p in reader.pages:
-                    writer.add_page(p)
+        if include_solutions and q.get("pdf_solution"):
+            s_pdf = PdfReader(q["pdf_solution"])
+            s_pages = [int(p)-1 for p in q["s_pages"].split(",") if p.strip()]
+            for p in s_pages:
+                writer.add_page(s_pdf.pages[p])
 
-    # Output
-    if out_path:
-        with open(out_path, "wb") as f:
-            writer.write(f)
-        return out_path
-    else:
-        buf = BytesIO()
-        writer.write(buf)
-        buf.seek(0)
-        return buf
+    from io import BytesIO
+    buf = BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    return buf
+
 # Optional pre-cache (runs once at app startup)
 try:
     from pathlib import Path
