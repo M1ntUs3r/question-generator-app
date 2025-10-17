@@ -36,7 +36,7 @@
     .actions {
       margin-top: 25px;
     }
-    button {
+    .btn {
       background: #2b6cb0;
       color: white;
       border: none;
@@ -44,8 +44,11 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 15px;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
     }
-    button:hover {
+    .btn:hover {
       background: #1a4e8a;
     }
     a.back {
@@ -62,7 +65,7 @@
 <body>
   <h1>🎯 Your Random Question Set</h1>
 
-  <form method="post" action="/download">
+  <form id="questions-form">
     <table>
       <thead>
         <tr>
@@ -93,10 +96,32 @@
     </table>
 
     <div class="actions">
-      <button type="submit">📘 Download PDF (Questions + Answers)</button>
+      <a id="view-pdf" class="btn" target="_blank">📘 View PDF (Questions + Answers)</a>
     </div>
   </form>
 
   <a href="/" class="back">← Back to Generator</a>
+
+  <script>
+    // Collect all question IDs and open PDF in a new tab
+    const viewBtn = document.getElementById("view-pdf");
+
+    viewBtn.addEventListener("click", function(e) {
+      e.preventDefault();
+
+      const qids = Array.from(document.querySelectorAll("input[name='qid']")).map(i => i.value);
+
+      if(qids.length === 0){
+        alert("No questions selected!");
+        return;
+      }
+
+      const params = new URLSearchParams();
+      qids.forEach(id => params.append("qid", id));
+
+      // Open PDF inline in a new tab
+      window.open("/download?" + params.toString(), "_blank");
+    });
+  </script>
 </body>
 </html>
