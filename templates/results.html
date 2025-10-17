@@ -65,50 +65,55 @@
 <body>
   <h1>🎯 Your Random Question Set</h1>
 
-  <form id="questions-form">
-    <table>
-      <thead>
-        <tr>
-          <th>Year</th>
-          <th>Paper</th>
-          <th>Question</th>
-          <th>Topic</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for q in questions %}
-        <tr>
-          <td>{{ q.year }}</td>
-          <td>{{ q.paper }}</td>
-          <td>
-            {% set qid = q.question_id %}
-            {% if qid %}
-              {{ qid[-3:] if qid[-3:].startswith("Q") else (qid[-2:]) }}
-            {% else %}
-              Q?
-            {% endif %}
-          </td>
-          <td>{{ q.topic }}</td>
-        </tr>
-        <input type="hidden" name="qid" value="{{ q.question_id }}">
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <div class="actions">
-      <a id="view-pdf" class="btn" target="_blank">📘 View PDF (Questions + Answers)</a>
-    </div>
+  <!-- Hidden form for POST PDF request -->
+  <form id="download-form" method="POST" action="/download" target="_blank" style="display:none;">
+    <!-- Hidden inputs will be added dynamically via JS -->
   </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Year</th>
+        <th>Paper</th>
+        <th>Question</th>
+        <th>Topic</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in questions %}
+      <tr>
+        <td>{{ q.year }}</td>
+        <td>{{ q.paper }}</td>
+        <td>
+          {% set qid = q.question_id %}
+          {% if qid %}
+            {{ qid[-3:] if qid[-3:].startswith("Q") else (qid[-2:]) }}
+          {% else %}
+            Q?
+          {% endif %}
+        </td>
+        <td>{{ q.topic }}</td>
+      </tr>
+      <input type="hidden" name="qid" value="{{ q.question_id }}">
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="actions">
+    <button id="view-pdf" type="button" class="btn">📘 View PDF (Questions + Answers)</button>
+  </div>
 
   <a href="/" class="back">← Back to Generator</a>
 
   <script>
-    // Collect all question IDs and open PDF in a new tab
     const viewBtn = document.getElementById("view-pdf");
+    const downloadForm = document.getElementById("download-form");
 
-    viewBtn.addEventListener("click", function(e) {
-      e.preventDefault();
+    viewBtn.addEventListener("click", function() {
+      // Clear any previous hidden inputs
+      downloadForm.innerHTML = '';
 
+      // Collect all question IDs
       const qids = Array.from(document.querySelectorAll("input[name='qid']")).map(i => i.value);
 
       if(qids.length === 0){
@@ -116,11 +121,17 @@
         return;
       }
 
-      const params = new URLSearchParams();
-      qids.forEach(id => params.append("qid", id));
+      // Add hidden inputs to the form
+      qids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'qid';
+        input.value = id;
+        downloadForm.appendChild(input);
+      });
 
-      // Open PDF inline in a new tab
-      window.open("/download?" + params.toString(), "_blank");
+      // Submit the form to open PDF in a new tab
+      downloadForm.submit();
     });
   </script>
 </body>
