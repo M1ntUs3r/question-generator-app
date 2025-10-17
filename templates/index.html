@@ -117,7 +117,7 @@
       <div class="mb-3">
         <label class="form-label">Select Topic (optional)</label>
         <select name="topic" class="form-select">
-          <option value="" selected hidden>No topic filter</option>
+          <option value="" selected hidden> </option>
           {% for topic in topics %}
             <option value="{{ topic }}">{{ topic }}</option>
           {% endfor %}
@@ -127,7 +127,7 @@
       <div class="mb-3">
         <label class="form-label">Select Paper (optional)</label>
         <select name="paper" class="form-select">
-          <option value="" selected hidden>No paper filter</option>
+          <option value="" selected hidden> </option>
           <option value="P1">Paper 1 (Non-Calculator)</option>
           <option value="P2">Paper 2 (Calculator)</option>
         </select>
@@ -136,7 +136,7 @@
       <div class="mb-3">
         <label class="form-label">Select Year (optional)</label>
         <select name="year" class="form-select">
-          <option value="" selected hidden>No year filter</option>
+          <option value="" selected hidden> </option>
           {% for year in years %}
             <option value="{{ year }}">{{ year }}</option>
           {% endfor %}
