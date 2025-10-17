@@ -19,7 +19,7 @@
     }
     .table-container {
       width: 100%;
-      overflow-x: auto; /* allow horizontal scroll on small screens */
+      overflow-x: auto;
       margin-bottom: 20px;
     }
     table {
@@ -28,7 +28,7 @@
       background: #fff;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       border-radius: 8px;
-      min-width: 500px; /* ensures table looks ok on desktop */
+      min-width: 500px;
     }
     th, td {
       text-align: left;
@@ -75,30 +75,54 @@
       text-decoration: underline;
     }
 
+    /* Loading overlay */
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      text-align: center;
+      color: white;
+      font-size: 1.5rem;
+      padding-top: 35vh;
+    }
+    /* Spinner */
+    #loading-overlay .spinner {
+      margin: 0 auto 20px auto;
+      width: 50px;
+      height: 50px;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #2b6cb0;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+
     /* Responsive tweaks */
     @media (max-width: 600px) {
-      body {
-        margin: 10px;
-      }
-      h1 {
-        font-size: 1.5rem;
-      }
-      th, td {
-        padding: 8px 10px;
-        font-size: 0.9rem;
-      }
-      .btn {
-        width: 100%; /* full width on small screens */
-      }
+      body { margin: 10px; }
+      h1 { font-size: 1.5rem; }
+      th, td { padding: 8px 10px; font-size: 0.9rem; }
+      .btn { width: 100%; }
     }
   </style>
 </head>
 <body>
   <h1>🎯 Your Random Question Set</h1>
 
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    Generating PDF, please wait...
+  </div>
+
   <!-- Hidden form for POST PDF request -->
   <form id="download-form" method="POST" action="/download" target="_blank" style="display:none;">
-    <!-- Hidden inputs will be added dynamically via JS -->
+    <!-- Hidden inputs added dynamically via JS -->
   </form>
 
   <div class="table-container">
@@ -141,20 +165,24 @@
   <script>
     const viewBtn = document.getElementById("view-pdf");
     const downloadForm = document.getElementById("download-form");
+    const overlay = document.getElementById("loading-overlay");
 
     viewBtn.addEventListener("click", function() {
-      // Clear previous hidden inputs
+      // Show overlay
+      overlay.style.display = "block";
+
+      // Clear previous inputs
       downloadForm.innerHTML = '';
 
-      // Collect all question IDs
+      // Collect question IDs
       const qids = Array.from(document.querySelectorAll("input[name='qid']")).map(i => i.value);
-
       if(qids.length === 0){
         alert("No questions selected!");
+        overlay.style.display = "none";
         return;
       }
 
-      // Add hidden inputs to the form
+      // Add hidden inputs
       qids.forEach(id => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -163,8 +191,11 @@
         downloadForm.appendChild(input);
       });
 
-      // Submit form in a new tab
+      // Submit form (PDF opens in new tab)
       downloadForm.submit();
+
+      // Optional fallback: hide overlay after 5s
+      setTimeout(() => overlay.style.display = "none", 5000);
     });
   </script>
 </body>
