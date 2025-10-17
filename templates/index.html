@@ -21,7 +21,7 @@
       align-items: center;
       justify-content: center;
       gap: 10px;
-      flex-wrap: wrap; /* wrap logo/title on small screens */
+      flex-wrap: wrap;
     }
 
     header img {
@@ -43,7 +43,7 @@
       }
     }
 
-    /* Card container */
+    /* Card */
     .card {
       border: none;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
@@ -54,7 +54,7 @@
       margin: 0 auto;
     }
 
-    /* Form styles */
+    /* Form */
     .form-label {
       color: #2eccb0;
       font-weight: 500;
@@ -113,10 +113,11 @@
 <div class="container py-5">
   <div class="card p-4">
     <form method="post" action="/generate">
+      <!-- Optional filters -->
       <div class="mb-3">
-        <label class="form-label">Select Topic</label>
-        <select name="topic" class="form-select" required>
-          <option value="" disabled selected hidden>Select a topic...</option>
+        <label class="form-label">Select Topic (optional)</label>
+        <select name="topic" class="form-select">
+          <option value="" selected hidden>No topic filter</option>
           {% for topic in topics %}
             <option value="{{ topic }}">{{ topic }}</option>
           {% endfor %}
@@ -124,25 +125,25 @@
       </div>
 
       <div class="mb-3">
-        <label class="form-label">Select Paper</label>
-        <select name="paper" class="form-select" required>
-          <option value="" disabled selected hidden>Select a paper...</option>
+        <label class="form-label">Select Paper (optional)</label>
+        <select name="paper" class="form-select">
+          <option value="" selected hidden>No paper filter</option>
           <option value="P1">Paper 1 (Non-Calculator)</option>
           <option value="P2">Paper 2 (Calculator)</option>
         </select>
       </div>
 
       <div class="mb-3">
-        <label class="form-label">Select Year</label>
-        <select name="year" class="form-select" required>
-          <option value="" disabled selected hidden>Select a year...</option>
+        <label class="form-label">Select Year (optional)</label>
+        <select name="year" class="form-select">
+          <option value="" selected hidden>No year filter</option>
           {% for year in years %}
             <option value="{{ year }}">{{ year }}</option>
           {% endfor %}
         </select>
       </div>
 
-      <!-- ✅ New: Number of Questions -->
+      <!-- Required number input -->
       <div class="mb-3">
         <label class="form-label">Number of Questions</label>
         <input 
