@@ -5,8 +5,8 @@ from io import BytesIO
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 import re
-import tempfile
 import requests
+import hashlib
 
 STATIC_ROOT = Path("static")
 
@@ -32,7 +32,7 @@ def _make_cover_pdf(list_items, title="Generated Practice Questions"):
 
 
 def _parse_page_spec(spec):
-    """Parses page ranges like '2-4,6,8-9' → [1,2,3,5,7,8]."""
+    """Parses page ranges like '2-4,6,8-9' → [0,1,2,5,7,8]."""
     pages = set()
     if not spec:
         return []
@@ -58,34 +58,29 @@ def _parse_page_spec(spec):
 def _get_pdf_reader(path_or_url):
     """Returns a PdfReader for a local path or a web URL, with caching for remote files."""
     try:
-        # ✅ Check if it's a web URL
+        # ✅ Web URL
         if isinstance(path_or_url, str) and path_or_url.lower().startswith("http"):
             cache_dir = STATIC_ROOT / "cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Create a filename-safe hash for the URL
-            import hashlib
+            # Filename-safe hash for URL
             url_hash = hashlib.sha1(path_or_url.encode("utf-8")).hexdigest()
             cached_file = cache_dir / f"{url_hash}.pdf"
 
-            # If cached, use it immediately
             if cached_file.exists():
-                print(f"✅ Using cached PDF: {cached_file.name}")
                 return PdfReader(str(cached_file))
 
-            # Otherwise, download and cache
-            print(f"🔍 Downloading and caching PDF: {path_or_url}")
-            r = requests.get(path_or_url, timeout=20)
+            # Download and cache
+            r = requests.get(path_or_url, timeout=30)
             if r.status_code == 200 and "pdf" in r.headers.get("content-type", "").lower():
                 with open(cached_file, "wb") as f:
                     f.write(r.content)
-                print(f"📦 Cached PDF: {cached_file.name}")
                 return PdfReader(str(cached_file))
             else:
                 print(f"⚠️ Could not fetch valid PDF from {path_or_url} (HTTP {r.status_code})")
                 return None
 
-        # ✅ Local file path (already bundled or static)
+        # ✅ Local file
         else:
             path = STATIC_ROOT / path_or_url if not str(path_or_url).startswith("/") else Path(path_or_url)
             if path.exists():
@@ -98,58 +93,54 @@ def _get_pdf_reader(path_or_url):
         print(f"⚠️ Error reading PDF {path_or_url}: {e}")
         return None
 
+
 def build_pdf(selected_questions, include_solutions=True):
-    from PyPDF2 import PdfReader, PdfWriter
+    """Builds a single PDF in memory with all questions first, then solutions."""
     writer = PdfWriter()
-    from io import BytesIO
+    buf = BytesIO()
 
     def safe_pages(pdf_path, pages_str):
-        try:
-            reader = PdfReader(pdf_path)
-        except Exception as e:
-            print(f"⚠️ Could not open PDF: {pdf_path} ({e})")
-            return []
-        pages = []
-        for p in pages_str.split(","):
-            p = p.strip()
-            if p.isdigit() and int(p) > 0 and int(p) <= len(reader.pages):
-                pages.append(int(p)-1)
+        reader = _get_pdf_reader(pdf_path)
+        if not reader:
+            return None, []
+        pages = _parse_page_spec(pages_str)
+        # Filter out invalid pages
+        pages = [p for p in pages if 0 <= p < len(reader.pages)]
         return reader, pages
 
-    # Add all question pages first
+    # 1️⃣ Questions first
     for q in selected_questions:
         if not q.get("pdf_question") or not q.get("q_pages"):
             continue
         reader, pages = safe_pages(q["pdf_question"], q["q_pages"])
+        if not reader:
+            continue
         for p in pages:
             writer.add_page(reader.pages[p])
 
-    # Add all solution pages after
+    # 2️⃣ Solutions after
     if include_solutions:
         for q in selected_questions:
             if not q.get("pdf_solution") or not q.get("s_pages"):
                 continue
             reader, pages = safe_pages(q["pdf_solution"], q["s_pages"])
+            if not reader:
+                continue
             for p in pages:
                 writer.add_page(reader.pages[p])
 
-    buf = BytesIO()
     writer.write(buf)
     buf.seek(0)
     return buf
 
 
-
-# Optional pre-cache (runs once at app startup)
+# Optional pre-cache all URLs at startup
 try:
-    from pathlib import Path
     import pandas as pd
-
     ods_file = Path("converted_questions.ods")
     if ods_file.exists():
         df = pd.read_excel(ods_file, engine="odf")
         urls = set(df["PDF Question"].dropna().tolist() + df["PDF Solution"].dropna().tolist())
-        from modules.pdf_builder import _get_pdf_reader
         print(f"Pre-caching {len(urls)} PDFs...")
         for u in urls:
             if str(u).startswith("http"):
