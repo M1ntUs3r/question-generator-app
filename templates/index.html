@@ -11,7 +11,7 @@
       font-family: 'Poppins', sans-serif;
     }
     header {
-      background-color: #1d3557;
+      background-color: #2eccb0;
       color: white;
       padding: 1rem;
       text-align: center;
@@ -40,6 +40,10 @@
     .btn-primary:hover {
       background-color: #1d3557;
     }
+    .form-label {
+      color: #2eccb0;
+      font-weight: 500;
+    }
     footer {
       text-align: center;
       padding: 1rem;
@@ -61,6 +65,7 @@
       <div class="mb-3">
         <label class="form-label">Select Topic</label>
         <select name="topic" class="form-select">
+          <option value="" disable select hidden>Seelect a topic...</option>
           {% for topic in topics %}
             <option value="{{ topic }}">{{ topic }}</option>
           {% endfor %}
@@ -70,6 +75,7 @@
       <div class="mb-3">
         <label class="form-label">Select Paper</label>
         <select name="paper" class="form-select">
+          <option value="" disbale selected hidden>Select a paper...</option>
           <option value="P1">Paper 1 (Non-Calculator)</option>
           <option value="P2">Paper 2 (Calculator)</option>
         </select>
@@ -78,6 +84,7 @@
       <div class="mb-3">
         <label class="form-label">Select Year</label>
         <select name="year" class="form-select">
+          <option value="" disable selected hidden>Select a year...</option>
           {% for year in years %}
             <option value="{{ year }}">{{ year }}</option>
           {% endfor %}
@@ -90,7 +97,7 @@
 </div>
 
 <footer>
-  © 2025 National 5 Maths | Educational Use Only
+  © Mint Maths 2025 | Educational Use Only
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
