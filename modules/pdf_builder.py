@@ -101,29 +101,43 @@ def _get_pdf_reader(path_or_url):
 def build_pdf(selected_questions, include_solutions=True):
     from PyPDF2 import PdfReader, PdfWriter
     writer = PdfWriter()
+    from io import BytesIO
 
-    # 1️⃣ Add all question pages first
+    def safe_pages(pdf_path, pages_str):
+        try:
+            reader = PdfReader(pdf_path)
+        except Exception as e:
+            print(f"⚠️ Could not open PDF: {pdf_path} ({e})")
+            return []
+        pages = []
+        for p in pages_str.split(","):
+            p = p.strip()
+            if p.isdigit() and int(p) > 0 and int(p) <= len(reader.pages):
+                pages.append(int(p)-1)
+        return reader, pages
+
+    # Add all question pages first
     for q in selected_questions:
-        q_pdf = PdfReader(q["pdf_question"])
-        q_pages = [int(p)-1 for p in q["q_pages"].split(",") if p.strip()]
-        for p in q_pages:
-            writer.add_page(q_pdf.pages[p])
+        if not q.get("pdf_question") or not q.get("q_pages"):
+            continue
+        reader, pages = safe_pages(q["pdf_question"], q["q_pages"])
+        for p in pages:
+            writer.add_page(reader.pages[p])
 
-    # 2️⃣ Add all solution pages after all questions
+    # Add all solution pages after
     if include_solutions:
         for q in selected_questions:
-            if not q.get("pdf_solution"):
+            if not q.get("pdf_solution") or not q.get("s_pages"):
                 continue
-            s_pdf = PdfReader(q["pdf_solution"])
-            s_pages = [int(p)-1 for p in q["s_pages"].split(",") if p.strip()]
-            for p in s_pages:
-                writer.add_page(s_pdf.pages[p])
+            reader, pages = safe_pages(q["pdf_solution"], q["s_pages"])
+            for p in pages:
+                writer.add_page(reader.pages[p])
 
-    from io import BytesIO
     buf = BytesIO()
     writer.write(buf)
     buf.seek(0)
     return buf
+
 
 
 # Optional pre-cache (runs once at app startup)
