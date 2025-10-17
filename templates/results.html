@@ -1,17 +1,26 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Generated Question List</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
-      margin: 30px;
+      margin: 20px;
       background: #f9fafc;
       color: #333;
     }
     h1 {
       color: #2b6cb0;
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .table-container {
+      width: 100%;
+      overflow-x: auto; /* allow horizontal scroll on small screens */
+      margin-bottom: 20px;
     }
     table {
       width: 100%;
@@ -19,12 +28,13 @@
       background: #fff;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       border-radius: 8px;
-      overflow: hidden;
+      min-width: 500px; /* ensures table looks ok on desktop */
     }
     th, td {
       text-align: left;
-      padding: 10px 14px;
+      padding: 10px 12px;
       border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
     }
     th {
       background: #f1f4f8;
@@ -34,19 +44,22 @@
       border-bottom: none;
     }
     .actions {
-      margin-top: 25px;
+      margin: 20px 0;
+      text-align: center;
     }
     .btn {
       background: #2b6cb0;
       color: white;
       border: none;
-      padding: 10px 16px;
+      padding: 12px 18px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 15px;
+      font-size: 1rem;
       text-decoration: none;
       display: inline-block;
       text-align: center;
+      width: 200px;
+      max-width: 90%;
     }
     .btn:hover {
       background: #1a4e8a;
@@ -56,9 +69,27 @@
       margin-top: 20px;
       color: #2b6cb0;
       text-decoration: none;
+      font-size: 0.95rem;
     }
     a.back:hover {
       text-decoration: underline;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 600px) {
+      body {
+        margin: 10px;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      th, td {
+        padding: 8px 10px;
+        font-size: 0.9rem;
+      }
+      .btn {
+        width: 100%; /* full width on small screens */
+      }
     }
   </style>
 </head>
@@ -70,34 +101,36 @@
     <!-- Hidden inputs will be added dynamically via JS -->
   </form>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Year</th>
-        <th>Paper</th>
-        <th>Question</th>
-        <th>Topic</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for q in questions %}
-      <tr>
-        <td>{{ q.year }}</td>
-        <td>{{ q.paper }}</td>
-        <td>
-          {% set qid = q.question_id %}
-          {% if qid %}
-            {{ qid[-3:] if qid[-3:].startswith("Q") else (qid[-2:]) }}
-          {% else %}
-            Q?
-          {% endif %}
-        </td>
-        <td>{{ q.topic }}</td>
-      </tr>
-      <input type="hidden" name="qid" value="{{ q.question_id }}">
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Paper</th>
+          <th>Question</th>
+          <th>Topic</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+        <tr>
+          <td>{{ q.year }}</td>
+          <td>{{ q.paper }}</td>
+          <td>
+            {% set qid = q.question_id %}
+            {% if qid %}
+              {{ qid[-3:] if qid[-3:].startswith("Q") else (qid[-2:]) }}
+            {% else %}
+              Q?
+            {% endif %}
+          </td>
+          <td>{{ q.topic }}</td>
+        </tr>
+        <input type="hidden" name="qid" value="{{ q.question_id }}">
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <div class="actions">
     <button id="view-pdf" type="button" class="btn">📘 View PDF (Questions + Answers)</button>
@@ -110,7 +143,7 @@
     const downloadForm = document.getElementById("download-form");
 
     viewBtn.addEventListener("click", function() {
-      // Clear any previous hidden inputs
+      // Clear previous hidden inputs
       downloadForm.innerHTML = '';
 
       // Collect all question IDs
@@ -130,7 +163,7 @@
         downloadForm.appendChild(input);
       });
 
-      // Submit the form to open PDF in a new tab
+      // Submit form in a new tab
       downloadForm.submit();
     });
   </script>
