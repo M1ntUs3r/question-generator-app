@@ -50,13 +50,14 @@ def generate():
 
 @app.route("/download", methods=["POST"])
 def download():
-    ids = request.form.getlist("qid")
+    ids = request.form.getlist("qid")  # gets POST data
     qs = get_all_questions()
     selected = [q for q in qs if q.get("question_id") in ids]
     if not selected:
         abort(400, "No questions selected")
     buf = build_pdf(selected, include_solutions=True)
     return send_file(buf, as_attachment=False, mimetype="application/pdf")
+
 
 import os
 
