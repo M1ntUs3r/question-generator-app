@@ -34,19 +34,38 @@ def get_years():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    topics = request.form.getlist("topic")
-    years = request.form.getlist("year")
-    paper = request.form.get("paper", "")
+    # 1️⃣ Get form inputs and clean empty values
+    topics = [t for t in request.form.getlist("topic") if t.strip()]
+    years = [y for y in request.form.getlist("year") if y.strip()]
+    paper = request.form.get("paper", "").strip()
     n = int(request.form.get("num_questions", 5))
+
+    # 2️⃣ Load all questions
     qs = get_all_questions()
-    filtered = [q for q in qs if (not topics or q["topic"] in topics) and (not years or q["year"] in years) and (not paper or q["paper"]==paper)]
+
+    # 3️⃣ Apply filters (optional)
+    filtered = [
+        q for q in qs
+        if (not topics or q["topic"] in topics)
+        and (not years or q["year"] in years)
+        and (not paper or q["paper"] == paper)
+    ]
+
+    # 4️⃣ If no questions match filters, fallback to all questions
     if not filtered:
         filtered = qs
+
+    # 5️⃣ Randomly select n questions
     import random
     selected = filtered if len(filtered) <= n else random.sample(filtered, n)
-    paper_order = {"P1": 1, "P2": 2, "": 3} 
+
+    # 6️⃣ Sort by year ascending, then by paper (P1 first)
+    paper_order = {"P1": 1, "P2": 2, "": 3}  # unknown/empty paper goes last
     selected.sort(key=lambda q: (int(q["year"]) if q["year"] else 0, paper_order.get(q["paper"], 3)))
+
+    # 7️⃣ Render results page
     return render_template("results.html", questions=selected)
+
 
 @app.route("/download", methods=["POST"])
 def download():
