@@ -154,3 +154,20 @@ def build_pdf(selected_questions, include_solutions=True, out_path=None):
         writer.write(buf)
         buf.seek(0)
         return buf
+# Optional pre-cache (runs once at app startup)
+try:
+    from pathlib import Path
+    import pandas as pd
+
+    ods_file = Path("converted_questions.ods")
+    if ods_file.exists():
+        df = pd.read_excel(ods_file, engine="odf")
+        urls = set(df["PDF Question"].dropna().tolist() + df["PDF Solution"].dropna().tolist())
+        from modules.pdf_builder import _get_pdf_reader
+        print(f"Pre-caching {len(urls)} PDFs...")
+        for u in urls:
+            if str(u).startswith("http"):
+                _get_pdf_reader(u)
+        print("✅ Pre-cache complete")
+except Exception as e:
+    print("⚠️ Pre-cache skipped:", e)
