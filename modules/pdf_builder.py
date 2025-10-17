@@ -7,6 +7,7 @@ from pypdf import PdfReader, PdfWriter
 import re
 import requests
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 STATIC_ROOT = Path("static")
 
@@ -56,7 +57,7 @@ def _parse_page_spec(spec):
 
 
 def _get_pdf_reader(path_or_url):
-    """Returns a PdfReader for a local path or a web URL, with caching for remote files."""
+    """Returns a PdfReader for a local path or a web URL, with caching."""
     try:
         # ✅ Web URL
         if isinstance(path_or_url, str) and path_or_url.lower().startswith("http"):
@@ -92,14 +93,16 @@ def _get_pdf_reader(path_or_url):
         return None
 
 
-def build_pdf(selected_questions, include_solutions=True):
-    """Builds a PDF in memory with a cover page, all questions first, then solutions."""
+def build_pdf(selected_questions, include_solutions=True, max_workers=5):
+    """Builds a PDF in memory with a cover page, questions first, solutions after.
+    Uses parallel fetching of PDFs for speed.
+    """
     writer = PdfWriter()
     buf = BytesIO()
 
-    # 0️⃣ Make a front cover page with question list
+    # 0️⃣ Cover page
     question_titles = [
-        f"{q['year']} {q['paper']} – {q.get('topic','')} – {q.get('question_id','')}" 
+        f"{q['year']} {q['paper']} – {q.get('topic','')} – {q.get('question_id','')}"
         for q in selected_questions
     ]
     cover_buf = _make_cover_pdf(question_titles)
@@ -107,34 +110,46 @@ def build_pdf(selected_questions, include_solutions=True):
     for p in cover_reader.pages:
         writer.add_page(p)
 
-    def safe_pages(pdf_path, pages_str):
-        reader = _get_pdf_reader(pdf_path)
+    # Helper to fetch a single PDF safely
+    def fetch_pdf(q, key):
+        url = q.get(key)
+        pages_str = q.get("q_pages" if key=="pdf_question" else "s_pages", "")
+        if not url or not pages_str:
+            return None, []
+        reader = _get_pdf_reader(url)
         if not reader:
+            print(f"⚠️ Could not fetch PDF: {url} for {q.get('question_id')}")
             return None, []
         pages = _parse_page_spec(pages_str)
         pages = [p for p in pages if 0 <= p < len(reader.pages)]
+        if not pages:
+            print(f"⚠️ No valid pages for PDF: {url} ({pages_str})")
         return reader, pages
 
-    # 1️⃣ Add all question pages
-    for q in selected_questions:
-        if not q.get("pdf_question") or not q.get("q_pages"):
-            continue
-        reader, pages = safe_pages(q["pdf_question"], q["q_pages"])
-        if not reader:
-            continue
-        for p in pages:
-            writer.add_page(reader.pages[p])
-
-    # 2️⃣ Add all solution pages
-    if include_solutions:
+    # 1️⃣ Parallel fetch all question PDFs
+    question_futures = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         for q in selected_questions:
-            if not q.get("pdf_solution") or not q.get("s_pages"):
-                continue
-            reader, pages = safe_pages(q["pdf_solution"], q["s_pages"])
-            if not reader:
-                continue
-            for p in pages:
-                writer.add_page(reader.pages[p])
+            future = executor.submit(fetch_pdf, q, "pdf_question")
+            question_futures[future] = q
+        for future in as_completed(question_futures):
+            reader, pages = future.result()
+            if reader:
+                for p in pages:
+                    writer.add_page(reader.pages[p])
+
+    # 2️⃣ Parallel fetch all solution PDFs
+    if include_solutions:
+        solution_futures = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for q in selected_questions:
+                future = executor.submit(fetch_pdf, q, "pdf_solution")
+                solution_futures[future] = q
+            for future in as_completed(solution_futures):
+                reader, pages = future.result()
+                if reader:
+                    for p in pages:
+                        writer.add_page(reader.pages[p])
 
     writer.write(buf)
     buf.seek(0)
