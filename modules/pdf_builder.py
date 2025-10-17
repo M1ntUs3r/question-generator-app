@@ -102,14 +102,18 @@ def build_pdf(selected_questions, include_solutions=True):
     from PyPDF2 import PdfReader, PdfWriter
     writer = PdfWriter()
 
+    # 1️⃣ Add all question pages first
     for q in selected_questions:
-        # Add question pages
         q_pdf = PdfReader(q["pdf_question"])
         q_pages = [int(p)-1 for p in q["q_pages"].split(",") if p.strip()]
         for p in q_pages:
             writer.add_page(q_pdf.pages[p])
 
-        if include_solutions and q.get("pdf_solution"):
+    # 2️⃣ Add all solution pages after all questions
+    if include_solutions:
+        for q in selected_questions:
+            if not q.get("pdf_solution"):
+                continue
             s_pdf = PdfReader(q["pdf_solution"])
             s_pages = [int(p)-1 for p in q["s_pages"].split(",") if p.strip()]
             for p in s_pages:
@@ -120,6 +124,7 @@ def build_pdf(selected_questions, include_solutions=True):
     writer.write(buf)
     buf.seek(0)
     return buf
+
 
 # Optional pre-cache (runs once at app startup)
 try:
