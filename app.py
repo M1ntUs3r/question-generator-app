@@ -170,7 +170,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
         with st.spinner("Preparing your PDF..."):
-            pdf_buf = build_pdf(questions, include_solutions=True)
+            pdf_buf = build_pdf(questions)
 
         st.download_button(
             label="⬇️ Download PDF (Questions + Solutions)",
