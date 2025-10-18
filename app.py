@@ -143,7 +143,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # -----------------------------------------------------
 
 # -----------------------------------------------------
-# Generate Questions
+# Generate Questions and PDF Handling
 # -----------------------------------------------------
 
 if st.button("🎲 Generate Questions", use_container_width=True):
@@ -154,14 +154,15 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 
     if not questions:
         st.warning("⚠️ No questions found for the selected filters. Try different options.")
-        st.session_state["questions"] = []  # clear any old ones
+        st.session_state["questions"] = []
     else:
         st.success(f"✅ Generated {len(questions)} question(s).")
+        # Save to session
+        st.session_state["questions"] = sorted(
+            questions, key=lambda q: (q["year"], 0 if q["paper"] == "P1" else 1, q["question_id"])
+        )
 
-        # save to session so the next button click remembers
-        st.session_state["questions"] = questions
-
-# Display the list if it already exists
+# If questions exist, show them and enable PDF
 if "questions" in st.session_state and st.session_state["questions"]:
     questions = st.session_state["questions"]
 
@@ -170,9 +171,6 @@ if "questions" in st.session_state and st.session_state["questions"]:
         qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
         st.markdown(f"**{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
 
-    # -----------------------------------------------------
-    # 📘 PDF Download Section
-    # -----------------------------------------------------
     st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
     st.markdown(
         f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>",
@@ -187,5 +185,5 @@ if "questions" in st.session_state and st.session_state["questions"]:
                 data=pdf_buf,
                 file_name="mintmaths_questions.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
             )
