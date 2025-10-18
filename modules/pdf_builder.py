@@ -1,26 +1,58 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
 from io import BytesIO
+from pathlib import Path
 from pypdf import PdfReader, PdfWriter
+import requests
 import re
-from datetime import datetime
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import io
 
-# -----------------------------------------------------
-# Helper: Parse page numbers
-# -----------------------------------------------------
+# Root static folder (for local PDFs)
+STATIC_ROOT = Path("static")
+
+# ============================================================
+# PDF COVER PAGE
+# ============================================================
+def _make_cover_pdf(list_items, title="Generated Practice Questions"):
+    """Creates a front cover page listing all selected questions."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(40, h - 60, title)
+    c.setFont("Helvetica", 12)
+
+    y = h - 100
+    for i, li in enumerate(list_items, 1):
+        c.drawString(40, y, f"{i}. {li}")
+        y -= 18
+        if y < 60:
+            c.showPage()
+            y = h - 60
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+# ============================================================
+# PAGE SPEC PARSER
+# ============================================================
 def _parse_page_spec(spec):
-    """Convert '2-4,6' → [1,2,3,5]."""
+    """Parse '2-4,6,8-9' → [0,1,2,5,7,8]"""
     pages = set()
     if not spec:
         return []
-    for part in re.split(r"[,\s]+", spec):
+    for part in re.split(r"[,\s]+", str(spec)):
         if not part:
             continue
         if "-" in part:
             a, b = part.split("-", 1)
             try:
-                for p in range(int(a), int(b) + 1):
+                a_i, b_i = int(a), int(b)
+                for p in range(a_i, b_i + 1):
                     pages.add(p - 1)
             except Exception:
                 continue
@@ -31,72 +63,16 @@ def _parse_page_spec(spec):
                 continue
     return sorted(pages)
 
-# -----------------------------------------------------
-# Helper: Make the branded cover page
-# -----------------------------------------------------
-def _make_cover_page(questions):
-    """Create the first (cover) page for the generated question set."""
-    buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    w, h = A4
-
-    # Brand colors
-    mint_green = "#A8E6CF"
-    mint_dark = "#379683"
-    text_color = "#2F4858"
-
-    # --- Header Banner ---
-    c.setFillColor(mint_dark)
-    c.rect(0, h - 80, w, 80, stroke=0, fill=1)
-
-    # Mint Maths Title
-    c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(colors.white)
-    c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
-
-    # --- Metadata ---
-    c.setFont("Helvetica", 11)
-    c.setFillColor(colors.grey)
-    date_str = datetime.now().strftime("%d %b %Y, %H:%M")
-    c.drawCentredString(w / 2, h - 95, f"Generated on {date_str}")
-
-    # --- Question List Section ---
-    c.setFont("Helvetica-Bold", 14)
-    c.setFillColor(mint_dark)
-    c.drawString(40, h - 130, "Included Questions:")
-
-    c.setFont("Helvetica", 12)
-    c.setFillColor(colors.black)
-    y = h - 155
-    for i, q_text in enumerate(questions, start=1):
-        c.drawString(60, y, f"{i}. {q_text}")
-        y -= 18
-        if y < 60:
-            c.showPage()
-            y = h - 80
-            c.setFont("Helvetica", 12)
-            c.setFillColor(colors.black)
-
-    c.save()
-    buf.seek(0)
-    return PdfReader(buf)
-
-# -----------------------------------------------------
-# Main Function: Build the Combined PDF
-# -----------------------------------------------------
-import io
-import requests
-from pypdf import PdfReader
-import hashlib
-import time
-
-def _get_pdf_reader(path_or_url, max_retries=3):
-    """Returns a PdfReader for a local path or a web URL, with retry + logging."""
+# ============================================================
+# PDF FETCHING (WITH RETRIES + MEMORY CACHING)
+# ============================================================
+def _get_pdf_reader(path_or_url, max_retries=3, timeout=10):
+    """Fetch local or remote PDF with retry and memory cache."""
     try:
         if isinstance(path_or_url, str) and path_or_url.lower().startswith("http"):
             for attempt in range(1, max_retries + 1):
                 try:
-                    r = requests.get(path_or_url, timeout=10)
+                    r = requests.get(path_or_url, timeout=timeout)
                     if r.status_code == 200 and "pdf" in r.headers.get("content-type", "").lower():
                         return PdfReader(io.BytesIO(r.content))
                     else:
@@ -105,22 +81,86 @@ def _get_pdf_reader(path_or_url, max_retries=3):
                 except Exception as e:
                     print(f"⚠️ Attempt {attempt}/{max_retries} failed for {path_or_url}: {e}")
                     time.sleep(1)
+            print(f"❌ Failed to fetch {path_or_url} after {max_retries} retries.")
             return None
+
+        # Local file
+        path = STATIC_ROOT / path_or_url if not str(path_or_url).startswith("/") else Path(path_or_url)
+        if path.exists():
+            return PdfReader(str(path))
         else:
-            # Local file
-            path = Path(path_or_url)
-            if path.exists():
-                return PdfReader(str(path))
-            else:
-                print(f"⚠️ Local file not found: {path_or_url}")
-                return None
+            print(f"⚠️ Local PDF not found: {path}")
+            return None
     except Exception as e:
         print(f"⚠️ Unexpected error reading {path_or_url}: {e}")
         return None
 
-
-    # --- 4️⃣ Write PDF Buffer ---
+# ============================================================
+# BUILD PDF
+# ============================================================
+def build_pdf(selected_questions, include_solutions=True, max_workers=3):
+    """
+    Builds a combined PDF:
+      1️⃣ Cover page with the random list.
+      2️⃣ All questions (in order).
+      3️⃣ All solutions (in order).
+    """
+    writer = PdfWriter()
     buf = BytesIO()
+
+    # 1️⃣ COVER PAGE
+    question_titles = [
+        f"Q{q['question_id'].split('_')[-1].replace('Q','').lstrip('0')} - {q['year']} {q['paper']} - {q['topic']}"
+        for q in selected_questions
+    ]
+    cover_buf = _make_cover_pdf(question_titles)
+    for p in PdfReader(cover_buf).pages:
+        writer.add_page(p)
+
+    # ============================================================
+    # Helper for parallel fetching
+    # ============================================================
+    def fetch_pdf(q, key):
+        url = q.get(key)
+        pages_str = q.get("q_pages" if key == "pdf_question" else "s_pages", "")
+        if not url:
+            print(f"⚠️ Missing URL for {q.get('question_id')} ({key})")
+            return None, []
+        reader = _get_pdf_reader(url)
+        if not reader:
+            print(f"⚠️ Could not fetch PDF for {q.get('question_id')} ({key})")
+            return None, []
+        pages = _parse_page_spec(pages_str)
+        pages = [p for p in pages if 0 <= p < len(reader.pages)]
+        if not pages:
+            print(f"⚠️ No valid pages for {q.get('question_id')} ({pages_str})")
+        return reader, pages
+
+    # 2️⃣ QUESTIONS SECTION
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(fetch_pdf, q, "pdf_question"): q for q in selected_questions}
+        for future in as_completed(futures):
+            reader, pages = future.result()
+            if reader and pages:
+                for p in pages:
+                    writer.add_page(reader.pages[p])
+            else:
+                q = futures[future]
+                print(f"⚠️ Skipped question {q.get('question_id')} (no valid PDF)")
+
+    # 3️⃣ SOLUTIONS SECTION
+    if include_solutions:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(fetch_pdf, q, "pdf_solution"): q for q in selected_questions}
+            for future in as_completed(futures):
+                reader, pages = future.result()
+                if reader and pages:
+                    for p in pages:
+                        writer.add_page(reader.pages[p])
+                else:
+                    q = futures[future]
+                    print(f"⚠️ Skipped solution for {q.get('question_id')}")
+
     writer.write(buf)
     buf.seek(0)
     return buf
