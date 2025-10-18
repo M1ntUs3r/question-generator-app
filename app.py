@@ -169,14 +169,16 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         # -----------------------------------------------------
         st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
-        with st.spinner("Preparing your PDF..."):
-           pdf_buf = build_pdf(questions)
+       if st.button("📘 Generate PDF"):
+        with st.spinner("Building PDF..."):
+            pdf_buf = build_pdf(selected_questions)
             st.download_button(
-                "📘 Download PDF",
-                pdf_buf,
-                file_name="generated_questions.pdf",
-                mime="application/pdf"
+                "⬇️ Download Mint Maths PDF",
+                data=pdf_buf,
+                file_name="mintmaths_questions.pdf",
+                mime="application/pdf",
             )
+
 
 
         st.download_button(
