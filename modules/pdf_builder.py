@@ -82,99 +82,97 @@ def _extract_pages(pdf_path: str, pages_str: str):
 
 def build_pdf(selected_questions):
     """
-    Build a combined PDF with:
-    1️⃣ Mint-green first page listing all questions (e.g. 'Q1 - 2014 P1 - Algebra')
-    2️⃣ All questions in order
-    3️⃣ All matching solutions in order
+    Build a full PDF (with title page, questions, and solutions).
+    Compatible with Render's /tmp filesystem.
     """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from io import BytesIO
 
-    print("🔍 Building PDF for", len(selected_questions), "questions...")
+    print(f"🧱 Building PDF for {len(selected_questions)} questions...")
 
-    # ✅ Step 1: Cache all needed PDFs
-    all_urls = []
-    for q in selected_questions:
-        if q.get("pdf_question"):
-            all_urls.append(q["pdf_question"])
-        if q.get("pdf_solution"):
-            all_urls.append(q["pdf_solution"])
+    buffer = BytesIO()
 
-    print(f"🔍 Caching {len(all_urls)} unique PDFs...")
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        cached_files = list(pool.map(_cache_pdf, all_urls))
-    print(f"✅ Cached {len([f for f in cached_files if f])} PDFs successfully.")
+    # ✅ Save PDF in /tmp so Render can write it
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        title="Generated Maths Questions",
+        leftMargin=40, rightMargin=40,
+        topMargin=60, bottomMargin=60,
+    )
 
-    # ✅ Step 2: Create the first (cover) page
-    cover_path = os.path.join(PDF_CACHE, "cover_page.pdf")
-    doc = SimpleDocTemplate(cover_path, pagesize=A4)
     styles = getSampleStyleSheet()
-
-    title_style = ParagraphStyle(
-        "MintGreenTitle",
-        parent=styles["Title"],
-        textColor=colors.HexColor("#006d5b"),
-        fontSize=22,
-        spaceAfter=20,
+    styles.add(ParagraphStyle(
+        name="MintTitle",
+        fontSize=24,
+        leading=28,
+        textColor=colors.HexColor("#2eccb0"),  # mint green
         alignment=1,  # center
-    )
-    list_style = ParagraphStyle(
-        "ListMintGreen",
-        parent=styles["Normal"],
-        textColor=colors.HexColor("#004c3f"),
-        fontSize=13,
-        leading=18,
-        spaceAfter=4,
-    )
+        spaceAfter=20
+    ))
+    styles.add(ParagraphStyle(
+        name="Question",
+        fontSize=12,
+        leading=15,
+        spaceAfter=10
+    ))
+    styles.add(ParagraphStyle(
+        name="Solution",
+        fontSize=11,
+        leading=14,
+        textColor=colors.grey,
+        leftIndent=20,
+        spaceAfter=15
+    ))
 
-    content = [Paragraph("Randomly Generated Question List", title_style), Spacer(1, 12)]
+    content = []
+
+    # Mint green title page
+    content.append(Spacer(1, 200))
+    content.append(Paragraph("Mint Maths Question Generator", styles["MintTitle"]))
+    content.append(Paragraph("Generated Questions and Solutions", styles["Question"]))
+    content.append(PageBreak())
+
+    # Add questions and solutions
     for q in selected_questions:
-        qid = q["question_id"]
-        num = qid.split("_Q")[-1] if "_Q" in qid else qid
-        text = f"Q{num} - {q['year']} P{q['paper']} - {q['topic']}"
-        content.append(Paragraph(text, list_style))
+        qid = q.get("id", "Unknown ID")
+        content.append(Paragraph(f"<b>{qid}</b>", styles["Question"]))
 
+        q_text = q.get("question_text", "").strip() or "Question text missing."
+        content.append(Paragraph(q_text, styles["Question"]))
+
+        # Add embedded question PDF (if cached locally)
+        q_pdf_path = q.get("pdf_question")
+        if q_pdf_path and os.path.exists(q_pdf_path):
+            try:
+                content.append(Image(q_pdf_path, width=400, height=300))
+            except Exception as e:
+                print(f"⚠️ Failed to embed image for {qid}: {e}")
+
+        content.append(Spacer(1, 12))
+
+        sol_text = q.get("solution_text", "").strip()
+        if sol_text:
+            content.append(Paragraph("<b>Solution:</b>", styles["Solution"]))
+            content.append(Paragraph(sol_text, styles["Solution"]))
+
+        sol_pdf_path = q.get("pdf_solution")
+        if sol_pdf_path and os.path.exists(sol_pdf_path):
+            try:
+                content.append(Image(sol_pdf_path, width=400, height=300))
+            except Exception as e:
+                print(f"⚠️ Failed to embed solution image for {qid}: {e}")
+
+        content.append(PageBreak())
+
+    # ✅ Build PDF in-memory
     doc.build(content)
+    buffer.seek(0)
 
-    # ✅ Step 3: Combine PDFs — cover → questions → solutions
-    final_pdf = PdfWriter()
-    try:
-        final_pdf.append(PdfReader(cover_path))
-    except Exception as e:
-        print(f"⚠️ Could not append cover page: {e}")
-
-    # --- Add question pages
-    for q in selected_questions:
-        qid = q["question_id"]
-        question_pdf = _cache_pdf(q.get("pdf_question"))
-        if not question_pdf or not os.path.exists(question_pdf):
-            print(f"⚠️ Skipped question {qid} (no valid PDF)")
-            continue
-
-        question_pages = _extract_pages(question_pdf, q.get("q_pages"))
-        if question_pages:
-            for p in question_pages.pages:
-                final_pdf.add_page(p)
-        else:
-            print(f"⚠️ Skipped question {qid} (no valid pages)")
-
-    # --- Add solution pages
-    for q in selected_questions:
-        qid = q["question_id"]
-        solution_pdf = _cache_pdf(q.get("pdf_solution"))
-        if not solution_pdf or not os.path.exists(solution_pdf):
-            print(f"⚠️ Skipped solution for {qid}")
-            continue
-
-        solution_pages = _extract_pages(solution_pdf, q.get("s_pages"))
-        if solution_pages:
-            for p in solution_pages.pages:
-                final_pdf.add_page(p)
-        else:
-            print(f"⚠️ Skipped solution for {qid} (no valid pages)")
-
-    # ✅ Step 4: Save the final PDF
-    output_path = os.path.join(PDF_CACHE, "generated_questions.pdf")
-    with open(output_path, "wb") as f:
-        final_pdf.write(f)
-
-    print(f"✅ Final PDF saved to {output_path}")
-    return output_path
+    print("✅ PDF generation complete.")
+    return buffer
