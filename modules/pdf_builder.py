@@ -22,7 +22,17 @@ def _cache_pdf(url: str) -> str:
     Download and cache a PDF from a URL.
     Returns the local file path, or None if unavailable.
     """
+
     if not url:
+        return None
+
+    # 🧠 Handle local static PDFs directly
+    if os.path.exists(url):
+        return url
+
+    # 🧠 If the URL is not web-based, skip remote fetching
+    if not url.lower().startswith(("http://", "https://")):
+        print(f"⚠️ Skipping fetch: '{url}' is not a valid URL.")
         return None
 
     filename = _hash_url(url)
@@ -43,6 +53,7 @@ def _cache_pdf(url: str) -> str:
         print(f"⚠️ Could not fetch PDF from {url}: {e}")
 
     return None
+
 
 
 def _extract_pages(pdf_path: str, pages_str: str):
