@@ -9,7 +9,6 @@ QUESTIONS = load_questions()
 
 @app.route("/")
 def index():
-    # Generate optional filters for frontend
     topics = sorted({q["topic"] for q in QUESTIONS})
     years = sorted({q["year"] for q in QUESTIONS})
     papers = sorted({q["paper"] for q in QUESTIONS if q.get("paper")})
@@ -18,12 +17,10 @@ def index():
 @app.route("/generate", methods=["POST"])
 def generate():
     num_questions = int(request.form.get("num_questions", 5))
-    # Optional filters
     selected_topics = request.form.getlist("topic")
     selected_years = request.form.getlist("year")
     selected_paper = request.form.get("paper")
 
-    # Filter questions
     filtered = [
         q for q in QUESTIONS
         if (not selected_topics or q["topic"] in selected_topics)
@@ -33,6 +30,9 @@ def generate():
 
     import random
     selected = filtered if len(filtered) <= num_questions else random.sample(filtered, num_questions)
+
+    # Sort by Year then Paper
+    selected.sort(key=lambda x: (x["year"], x["paper"]))
     return render_template("results.html", questions=selected)
 
 @app.route("/download", methods=["POST"])
@@ -42,6 +42,7 @@ def download():
     if not selected:
         from flask import abort
         abort(400, "No questions selected")
+
     pdf_buf = build_pdf(selected, include_solutions=True)
     return send_file(pdf_buf, mimetype="application/pdf", as_attachment=False, download_name="questions.pdf")
 
