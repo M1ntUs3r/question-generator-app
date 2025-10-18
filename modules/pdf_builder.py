@@ -1,141 +1,133 @@
-import os
-from io import BytesIO
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from pdf2image import convert_from_path
+from io import BytesIO
+from pypdf import PdfReader, PdfWriter
+import re
+from datetime import datetime
 
-
-def pdf_to_images(pdf_path, max_pages=2):
-    """
-    Converts a PDF into a list of image file paths (temporarily saved as PNGs).
-    Returns an empty list if conversion fails.
-    """
-    images = []
-    try:
-        if os.path.exists(pdf_path):
-            pages = convert_from_path(pdf_path, dpi=150, first_page=1, last_page=max_pages)
-            for i, page in enumerate(pages):
-                img_path = f"{pdf_path}_page{i+1}.png"
-                page.save(img_path, "PNG")
-                images.append(img_path)
-    except Exception as e:
-        print(f"⚠️ Could not convert PDF '{pdf_path}' to image: {e}")
-    return images
-
-
-def build_pdf(selected_questions):
-    """Build a mint-styled PDF with a title page, question list, and embedded question/solution pages as images."""
-
-    # Sort all questions by Year -> Paper -> ID
-    selected_questions.sort(key=lambda q: (q["year"], 0 if q["paper"] == "P1" else 1, q["question_id"]))
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        title="Mint Maths Question Generator",
-        leftMargin=40,
-        rightMargin=40,
-        topMargin=60,
-        bottomMargin=60,
-    )
-
-    # --- Styles ---
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(
-        name="MintTitle",
-        fontSize=24,
-        leading=28,
-        textColor=colors.HexColor("#379683"),
-        alignment=1,
-        spaceAfter=20,
-    ))
-    styles.add(ParagraphStyle(
-        name="MintSub",
-        fontSize=13,
-        leading=18,
-        textColor=colors.HexColor("#2F4858"),
-        alignment=1,
-        spaceAfter=10,
-    ))
-    styles.add(ParagraphStyle(
-        name="Question",
-        fontSize=12,
-        leading=15,
-        spaceAfter=8,
-    ))
-    styles.add(ParagraphStyle(
-        name="Solution",
-        fontSize=11,
-        leading=14,
-        textColor=colors.grey,
-        leftIndent=20,
-        spaceAfter=10,
-    ))
-
-    content = []
-
-    # -----------------------------------------------------
-    # Title Page
-    # -----------------------------------------------------
-    content.append(Spacer(1, 180))
-    content.append(Paragraph("Mint Maths Question Generator", styles["MintTitle"]))
-    content.append(Paragraph("Generated Question Set", styles["MintSub"]))
-    content.append(Spacer(1, 40))
-
-    content.append(Paragraph("<b>Question List:</b>", styles["Question"]))
-    for q in selected_questions:
-        qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
-        content.append(Paragraph(f"{qnum} – {q['year']} {q['paper']} – {q['topic']}", styles["Question"]))
-
-    content.append(PageBreak())
-
-    # -----------------------------------------------------
-    # Questions + Solutions with Images
-    # -----------------------------------------------------
-    for q in selected_questions:
-        qid = q.get("question_id", "Unknown ID")
-        year = q.get("year", "")
-        paper = q.get("paper", "")
-        topic = q.get("topic", "")
-        q_label = f"{year} {paper} - {topic}"
-
-        # Question Heading
-        content.append(Paragraph(f"<b>{qid}</b> – {q_label}", styles["Question"]))
-        content.append(Spacer(1, 8))
-
-        # Convert and add question PDF images
-        q_pdf_path = q.get("pdf_question")
-        if q_pdf_path and os.path.exists(q_pdf_path):
-            question_images = pdf_to_images(q_pdf_path)
-            for img_path in question_images:
-                content.append(Image(img_path, width=460, height=640))
-                content.append(Spacer(1, 12))
+# -----------------------------------------------------
+# Helper: Parse page numbers
+# -----------------------------------------------------
+def _parse_page_spec(spec):
+    """Convert '2-4,6' → [1,2,3,5]."""
+    pages = set()
+    if not spec:
+        return []
+    for part in re.split(r"[,\s]+", spec):
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            try:
+                for p in range(int(a), int(b) + 1):
+                    pages.add(p - 1)
+            except Exception:
+                continue
         else:
-            content.append(Paragraph("(Question PDF missing)", styles["Solution"]))
+            try:
+                pages.add(int(part) - 1)
+            except Exception:
+                continue
+    return sorted(pages)
 
-        content.append(Spacer(1, 16))
+# -----------------------------------------------------
+# Helper: Make the branded cover page
+# -----------------------------------------------------
+def _make_cover_page(questions):
+    """Create the first (cover) page for the generated question set."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
 
-        # Convert and add solution PDF images
-        sol_pdf_path = q.get("pdf_solution")
-        if sol_pdf_path and os.path.exists(sol_pdf_path):
-            solution_images = pdf_to_images(sol_pdf_path)
-            if solution_images:
-                content.append(Paragraph("<b>Solution:</b>", styles["Solution"]))
-                for img_path in solution_images:
-                    content.append(Image(img_path, width=460, height=640))
-                    content.append(Spacer(1, 8))
-            else:
-                content.append(Paragraph("(Solution PDF missing)", styles["Solution"]))
-        else:
-            content.append(Paragraph("(Solution not found)", styles["Solution"]))
+    # Brand colors
+    mint_green = "#A8E6CF"
+    mint_dark = "#379683"
+    text_color = "#2F4858"
 
-        content.append(PageBreak())
+    # --- Header Banner ---
+    c.setFillColor(mint_dark)
+    c.rect(0, h - 80, w, 80, stroke=0, fill=1)
 
-    doc.build(content)
-    buffer.seek(0)
-    return buffer
+    # Mint Maths Title
+    c.setFont("Helvetica-Bold", 22)
+    c.setFillColor(colors.white)
+    c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
+
+    # --- Metadata ---
+    c.setFont("Helvetica", 11)
+    c.setFillColor(colors.grey)
+    date_str = datetime.now().strftime("%d %b %Y, %H:%M")
+    c.drawCentredString(w / 2, h - 95, f"Generated on {date_str}")
+
+    # --- Question List Section ---
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(mint_dark)
+    c.drawString(40, h - 130, "Included Questions:")
+
+    c.setFont("Helvetica", 12)
+    c.setFillColor(colors.black)
+    y = h - 155
+    for i, q_text in enumerate(questions, start=1):
+        c.drawString(60, y, f"{i}. {q_text}")
+        y -= 18
+        if y < 60:
+            c.showPage()
+            y = h - 80
+            c.setFont("Helvetica", 12)
+            c.setFillColor(colors.black)
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf)
+
+# -----------------------------------------------------
+# Main Function: Build the Combined PDF
+# -----------------------------------------------------
+def build_pdf(selected_questions, include_solutions=True):
+    """Merge selected questions into one PDF: cover → questions → solutions."""
+    writer = PdfWriter()
+
+    # --- 1️⃣ Create Cover Page ---
+    formatted_list = [
+        f"{q['question_id'].split('_')[-1].upper()} – {q['year']} {q['paper']} – {q['topic']}"
+        for q in selected_questions
+    ]
+    cover = _make_cover_page(formatted_list)
+    for page in cover.pages:
+        writer.add_page(page)
+
+    # --- 2️⃣ Add Question Pages ---
+    for q in selected_questions:
+        pdf_path = q.get("pdf_question")
+        if not pdf_path:
+            continue
+        try:
+            reader = PdfReader(pdf_path)
+            pages = _parse_page_spec(q.get("q_pages", ""))
+            for p in pages:
+                if 0 <= p < len(reader.pages):
+                    writer.add_page(reader.pages[p])
+        except Exception as e:
+            print(f"⚠️ Skipping {pdf_path}: {e}")
+
+    # --- 3️⃣ Add Solution Pages ---
+    if include_solutions:
+        for q in selected_questions:
+            pdf_path = q.get("pdf_solution")
+            if not pdf_path:
+                continue
+            try:
+                reader = PdfReader(pdf_path)
+                pages = _parse_page_spec(q.get("s_pages", ""))
+                for p in pages:
+                    if 0 <= p < len(reader.pages):
+                        writer.add_page(reader.pages[p])
+            except Exception as e:
+                print(f"⚠️ Skipping {pdf_path}: {e}")
+
+    # --- 4️⃣ Write PDF Buffer ---
+    buf = BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    return buf
