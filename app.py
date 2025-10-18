@@ -1,14 +1,15 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, abort, jsonify
 from modules.data_handler import load_questions
 from modules.pdf_builder import build_pdf
+import random
+from io import BytesIO
 
 app = Flask(__name__)
-
-# Load all questions at startup
 QUESTIONS = load_questions()
 
 @app.route("/")
 def index():
+    # Optional filters: topics, years, papers
     topics = sorted({q["topic"] for q in QUESTIONS})
     years = sorted({q["year"] for q in QUESTIONS})
     papers = sorted({q["paper"] for q in QUESTIONS if q.get("paper")})
@@ -16,37 +17,20 @@ def index():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    num_questions = int(request.form.get("num_questions", 5))
-    selected_topics = request.form.getlist("topic")
-    selected_years = request.form.getlist("year")
-    selected_paper = request.form.get("paper")
-
-    filtered = [
-        q for q in QUESTIONS
-        if (not selected_topics or q["topic"] in selected_topics)
-        and (not selected_years or q["year"] in selected_years)
-        and (not selected_paper or q["paper"] == selected_paper)
-    ]
-
-    import random
-    selected = filtered if len(filtered) <= num_questions else random.sample(filtered, num_questions)
-
-    # Sort by Year then Paper
-    selected.sort(key=lambda x: (x["year"], x["paper"]))
+    n = int(request.form.get("num_questions", 5))
+    selected = random.sample(QUESTIONS, n) if len(QUESTIONS) > n else QUESTIONS.copy()
     return render_template("results.html", questions=selected)
 
 @app.route("/download", methods=["POST"])
 def download():
-    qids = request.form.getlist("qid")
-    selected = [q for q in QUESTIONS if q["question_id"] in qids]
-    if not selected:
-        from flask import abort
+    ids = request.form.getlist("qid")
+    if not ids:
         abort(400, "No questions selected")
-
-    pdf_buf = build_pdf(selected, include_solutions=True)
-    return send_file(pdf_buf, mimetype="application/pdf", as_attachment=False, download_name="questions.pdf")
+    selected = [q for q in QUESTIONS if q["question_id"] in ids]
+    if not selected:
+        abort(400, "No matching questions found")
+    buf = build_pdf(selected, include_solutions=True)
+    return send_file(buf, as_attachment=False, download_name="generated_questions.pdf", mimetype="application/pdf")
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(debug=True)
