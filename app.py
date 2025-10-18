@@ -171,24 +171,24 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
 import base64
 
-    if st.button("📘 Generate PDF", use_container_width=True):
-        with st.spinner("Building PDF..."):
-            pdf_buf = build_pdf(questions)
-            pdf_bytes = pdf_buf.getvalue()
-            b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-            pdf_display_link = f"""
-            <a href="data:application/pdf;base64,{b64_pdf}" target="_blank" style="
-                background-color: {mint_main};
-                color: {mint_text};
-                padding: 0.7em 1.2em;
-                border-radius: 8px;
-                text-decoration: none;
-                font-weight: 600;
-                display: inline-block;
-                transition: 0.3s ease-in-out;
-            " onmouseover="this.style.backgroundColor='#95dec2'" onmouseout="this.style.backgroundColor='{mint_main}'">
-                📖 Open Mint Maths PDF
-            </a>
-            """
-            st.markdown(pdf_display_link, unsafe_allow_html=True)
+if st.button("📘 Generate PDF", use_container_width=True):
+    with st.spinner("Building PDF..."):
+        pdf_buf = build_pdf(questions)
+        pdf_bytes = pdf_buf.getvalue()
+        b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+        pdf_display_link = f"""
+        <a href="data:application/pdf;base64,{b64_pdf}" target="_blank" style="
+            background-color: {mint_main};
+            color: {mint_text};
+            padding: 0.7em 1.2em;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            transition: 0.3s ease-in-out;
+        " onmouseover="this.style.backgroundColor='#95dec2'" onmouseout="this.style.backgroundColor='{mint_main}'">
+            📖 Open Mint Maths PDF
+        </a>
+        """
+        st.markdown(pdf_display_link, unsafe_allow_html=True)
 
