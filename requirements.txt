@@ -4,4 +4,6 @@ openpyxl
 odfpy
 requests
 pypdf
+pdf2image
+poppler-utils
 reportlab
