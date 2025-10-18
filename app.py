@@ -142,6 +142,10 @@ st.markdown("<br>", unsafe_allow_html=True)
 # Generate Questions
 # -----------------------------------------------------
 
+# -----------------------------------------------------
+# Generate Questions
+# -----------------------------------------------------
+
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions..."):
         questions = generate_random_questions(
@@ -150,30 +154,38 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 
     if not questions:
         st.warning("⚠️ No questions found for the selected filters. Try different options.")
+        st.session_state["questions"] = []  # clear any old ones
     else:
         st.success(f"✅ Generated {len(questions)} question(s).")
 
-        st.subheader("📝 Your Question List:")
-        for i, q in enumerate(questions, 1):
-            qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
-            st.markdown(f"**{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
+        # save to session so the next button click remembers
+        st.session_state["questions"] = questions
 
-        # -----------------------------------------------------
-        # 📘 PDF Download Section
-        # -----------------------------------------------------
-        st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
-        st.markdown(
-            f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>",
-            unsafe_allow_html=True,
-        )
+# Display the list if it already exists
+if "questions" in st.session_state and st.session_state["questions"]:
+    questions = st.session_state["questions"]
 
-        if st.button("📘 Generate PDF"):
-            with st.spinner("Building PDF..."):
-                pdf_buf = build_pdf(questions)
-                st.download_button(
-                    "⬇️ Download Mint Maths PDF",
-                    data=pdf_buf,
-                    file_name="mintmaths_questions.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+    st.subheader("📝 Your Question List:")
+    for q in questions:
+        qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
+        st.markdown(f"**{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
+
+    # -----------------------------------------------------
+    # 📘 PDF Download Section
+    # -----------------------------------------------------
+    st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>",
+        unsafe_allow_html=True,
+    )
+
+    if st.button("📘 Generate PDF"):
+        with st.spinner("Building PDF..."):
+            pdf_buf = build_pdf(questions)
+            st.download_button(
+                "⬇️ Download Mint Maths PDF",
+                data=pdf_buf,
+                file_name="mintmaths_questions.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
