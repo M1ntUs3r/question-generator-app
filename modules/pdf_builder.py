@@ -6,12 +6,31 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from pdf2image import convert_from_path
+
+
+def pdf_to_images(pdf_path, max_pages=2):
+    """
+    Converts a PDF into a list of image file paths (temporarily saved as PNGs).
+    Returns an empty list if conversion fails.
+    """
+    images = []
+    try:
+        if os.path.exists(pdf_path):
+            pages = convert_from_path(pdf_path, dpi=150, first_page=1, last_page=max_pages)
+            for i, page in enumerate(pages):
+                img_path = f"{pdf_path}_page{i+1}.png"
+                page.save(img_path, "PNG")
+                images.append(img_path)
+    except Exception as e:
+        print(f"⚠️ Could not convert PDF '{pdf_path}' to image: {e}")
+    return images
 
 
 def build_pdf(selected_questions):
-    """Builds a full mint-green styled PDF with a title page, ordered question list, and question/solution pages."""
+    """Build a mint-styled PDF with a title page, question list, and embedded question/solution pages as images."""
 
-    # Sort questions to ensure Year → Paper → Question order
+    # Sort all questions by Year -> Paper -> ID
     selected_questions.sort(key=lambda q: (q["year"], 0 if q["paper"] == "P1" else 1, q["question_id"]))
 
     buffer = BytesIO()
@@ -47,7 +66,7 @@ def build_pdf(selected_questions):
         name="Question",
         fontSize=12,
         leading=15,
-        spaceAfter=10,
+        spaceAfter=8,
     ))
     styles.add(ParagraphStyle(
         name="Solution",
@@ -55,7 +74,7 @@ def build_pdf(selected_questions):
         leading=14,
         textColor=colors.grey,
         leftIndent=20,
-        spaceAfter=15,
+        spaceAfter=10,
     ))
 
     content = []
@@ -68,7 +87,6 @@ def build_pdf(selected_questions):
     content.append(Paragraph("Generated Question Set", styles["MintSub"]))
     content.append(Spacer(1, 40))
 
-    # List of Questions
     content.append(Paragraph("<b>Question List:</b>", styles["Question"]))
     for q in selected_questions:
         qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
@@ -77,31 +95,44 @@ def build_pdf(selected_questions):
     content.append(PageBreak())
 
     # -----------------------------------------------------
-    # Add Questions and Solutions
+    # Questions + Solutions with Images
     # -----------------------------------------------------
     for q in selected_questions:
         qid = q.get("question_id", "Unknown ID")
-        q_text = q.get("question_text", "").strip() or "Question text missing."
+        year = q.get("year", "")
+        paper = q.get("paper", "")
+        topic = q.get("topic", "")
+        q_label = f"{year} {paper} - {topic}"
 
-        content.append(Paragraph(f"<b>{qid}</b>", styles["Question"]))
-        content.append(Paragraph(q_text, styles["Question"]))
+        # Question Heading
+        content.append(Paragraph(f"<b>{qid}</b> – {q_label}", styles["Question"]))
+        content.append(Spacer(1, 8))
 
-        # Optional: embedded question image (if present)
-        q_img_path = q.get("pdf_question")
-        if q_img_path and os.path.exists(q_img_path) and q_img_path.lower().endswith((".png", ".jpg", ".jpeg")):
-            content.append(Image(q_img_path, width=400, height=300))
+        # Convert and add question PDF images
+        q_pdf_path = q.get("pdf_question")
+        if q_pdf_path and os.path.exists(q_pdf_path):
+            question_images = pdf_to_images(q_pdf_path)
+            for img_path in question_images:
+                content.append(Image(img_path, width=460, height=640))
+                content.append(Spacer(1, 12))
+        else:
+            content.append(Paragraph("(Question PDF missing)", styles["Solution"]))
 
-        content.append(Spacer(1, 12))
+        content.append(Spacer(1, 16))
 
-        # Solution section
-        sol_text = q.get("solution_text", "").strip()
-        if sol_text:
-            content.append(Paragraph("<b>Solution:</b>", styles["Solution"]))
-            content.append(Paragraph(sol_text, styles["Solution"]))
-
-        sol_img_path = q.get("pdf_solution")
-        if sol_img_path and os.path.exists(sol_img_path) and sol_img_path.lower().endswith((".png", ".jpg", ".jpeg")):
-            content.append(Image(sol_img_path, width=400, height=300))
+        # Convert and add solution PDF images
+        sol_pdf_path = q.get("pdf_solution")
+        if sol_pdf_path and os.path.exists(sol_pdf_path):
+            solution_images = pdf_to_images(sol_pdf_path)
+            if solution_images:
+                content.append(Paragraph("<b>Solution:</b>", styles["Solution"]))
+                for img_path in solution_images:
+                    content.append(Image(img_path, width=460, height=640))
+                    content.append(Spacer(1, 8))
+            else:
+                content.append(Paragraph("(Solution PDF missing)", styles["Solution"]))
+        else:
+            content.append(Paragraph("(Solution not found)", styles["Solution"]))
 
         content.append(PageBreak())
 
