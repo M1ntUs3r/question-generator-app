@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, send_file, jsonify
-from modules.question_loader import QUESTIONS
+from modules.data_handler import QUESTIONS
 from modules.question_generator import get_random_questions
 from modules.pdf_builder import build_pdf
 
