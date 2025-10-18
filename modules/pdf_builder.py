@@ -84,47 +84,40 @@ def _make_cover_page(questions):
 # -----------------------------------------------------
 # Main Function: Build the Combined PDF
 # -----------------------------------------------------
-def build_pdf(selected_questions, include_solutions=True):
-    """Merge selected questions into one PDF: cover → questions → solutions."""
-    writer = PdfWriter()
+import io
+import requests
+from pypdf import PdfReader
+import hashlib
+import time
 
-    # --- 1️⃣ Create Cover Page ---
-    formatted_list = [
-        f"{q['question_id'].split('_')[-1].upper()} – {q['year']} {q['paper']} – {q['topic']}"
-        for q in selected_questions
-    ]
-    cover = _make_cover_page(formatted_list)
-    for page in cover.pages:
-        writer.add_page(page)
+def _get_pdf_reader(path_or_url, max_retries=3):
+    """Returns a PdfReader for a local path or a web URL, with retry + logging."""
+    try:
+        if isinstance(path_or_url, str) and path_or_url.lower().startswith("http"):
+            for attempt in range(1, max_retries + 1):
+                try:
+                    r = requests.get(path_or_url, timeout=10)
+                    if r.status_code == 200 and "pdf" in r.headers.get("content-type", "").lower():
+                        return PdfReader(io.BytesIO(r.content))
+                    else:
+                        print(f"⚠️ Invalid PDF (HTTP {r.status_code}) at {path_or_url}")
+                        return None
+                except Exception as e:
+                    print(f"⚠️ Attempt {attempt}/{max_retries} failed for {path_or_url}: {e}")
+                    time.sleep(1)
+            return None
+        else:
+            # Local file
+            path = Path(path_or_url)
+            if path.exists():
+                return PdfReader(str(path))
+            else:
+                print(f"⚠️ Local file not found: {path_or_url}")
+                return None
+    except Exception as e:
+        print(f"⚠️ Unexpected error reading {path_or_url}: {e}")
+        return None
 
-    # --- 2️⃣ Add Question Pages ---
-    for q in selected_questions:
-        pdf_path = q.get("pdf_question")
-        if not pdf_path:
-            continue
-        try:
-            reader = PdfReader(pdf_path)
-            pages = _parse_page_spec(q.get("q_pages", ""))
-            for p in pages:
-                if 0 <= p < len(reader.pages):
-                    writer.add_page(reader.pages[p])
-        except Exception as e:
-            print(f"⚠️ Skipping {pdf_path}: {e}")
-
-    # --- 3️⃣ Add Solution Pages ---
-    if include_solutions:
-        for q in selected_questions:
-            pdf_path = q.get("pdf_solution")
-            if not pdf_path:
-                continue
-            try:
-                reader = PdfReader(pdf_path)
-                pages = _parse_page_spec(q.get("s_pages", ""))
-                for p in pages:
-                    if 0 <= p < len(reader.pages):
-                        writer.add_page(reader.pages[p])
-            except Exception as e:
-                print(f"⚠️ Skipping {pdf_path}: {e}")
 
     # --- 4️⃣ Write PDF Buffer ---
     buf = BytesIO()
