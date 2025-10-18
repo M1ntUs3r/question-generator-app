@@ -69,13 +69,26 @@ def generate():
 
 @app.route("/download", methods=["POST"])
 def download():
-    ids = request.form.getlist("qid")  # gets POST data
-    qs = get_all_questions()
-    selected = [q for q in qs if q.get("question_id") in ids]
-    if not selected:
-        abort(400, "No questions selected")
-    buf = build_pdf(selected, include_solutions=True)
-    return send_file(buf, as_attachment=False, mimetype="application/pdf")
+    try:
+        ids = request.form.getlist("qid")
+        qs = get_all_questions()
+        selected = [q for q in qs if q.get("question_id") in ids]
+        if not selected:
+            abort(400, "No questions selected")
+
+        buf = build_pdf(selected, include_solutions=True)
+        return send_file(
+            buf,
+            as_attachment=False,
+            download_name="generated_questions.pdf",
+            mimetype="application/pdf"
+        )
+
+    except Exception as e:
+        import traceback
+        print("❌ PDF generation failed:", e)
+        traceback.print_exc()
+        return f"<h3 style='color:red;'>PDF generation failed: {e}</h3>", 500
 
 
 import os
