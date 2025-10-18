@@ -20,7 +20,6 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    # Keep your existing ordering logic
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
@@ -33,10 +32,9 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
 
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
 
-# Mint green theme colors
-mint_main = "#A8E6CF"  # pastel mint
-mint_dark = "#379683"  # deeper mint/teal for buttons
-mint_text = "#2F4858"  # dark text
+mint_main = "#A8E6CF"
+mint_dark = "#379683"
+mint_text = "#2F4858"
 
 # --- Custom CSS styling ---
 st.markdown(
@@ -83,11 +81,7 @@ st.markdown(
             padding-bottom: 3rem;
             margin: auto;
         }}
-        .stSelectbox label {{
-            font-weight: 600 !important;
-            color: {mint_text} !important;
-        }}
-        .stNumberInput label {{
+        .stSelectbox label, .stNumberInput label {{
             font-weight: 600 !important;
             color: {mint_text} !important;
         }}
@@ -121,7 +115,6 @@ papers = sorted({q["paper"] for q in QUESTIONS if q["paper"]})
 topics = sorted({q["topic"] for q in QUESTIONS if q["topic"]})
 
 col1, col2, col3 = st.columns(3)
-
 with col1:
     year = st.selectbox("Year", ["Select"] + years)
 with col2:
@@ -151,7 +144,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions..."):
-        questions = generate_random_questions(QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic)
+        questions = generate_random_questions(
+            QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic
+        )
 
     if not questions:
         st.warning("⚠️ No questions found for the selected filters. Try different options.")
@@ -160,31 +155,25 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 
         st.subheader("📝 Your Question List:")
         for i, q in enumerate(questions, 1):
-            qnum = q['question_id'].split('_')[-1].upper().replace("Q", "Q")
+            qnum = q["question_id"].split("_")[-1].upper().replace("Q", "Q")
             st.markdown(f"**{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
 
-
         # -----------------------------------------------------
-        # 📘 Add PDF Download Button
+        # 📘 PDF Download Section
         # -----------------------------------------------------
         st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
-       if st.button("📘 Generate PDF"):
-           with st.spinner("Building PDF...")
-                pdf_buf = build_pdf(selected_questions)
+        st.markdown(
+            f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>",
+            unsafe_allow_html=True,
+        )
+
+        if st.button("📘 Generate PDF"):
+            with st.spinner("Building PDF..."):
+                pdf_buf = build_pdf(questions)
                 st.download_button(
                     "⬇️ Download Mint Maths PDF",
                     data=pdf_buf,
                     file_name="mintmaths_questions.pdf",
                     mime="application/pdf",
+                    use_container_width=True
                 )
-
-
-
-        st.download_button(
-            label="⬇️ Download PDF (Questions + Solutions)",
-            data=pdf_buf,
-            file_name="generated_questions.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
