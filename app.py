@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import os
 import base64
+import pathlib
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -147,53 +148,51 @@ if st.button("🎲 Generate Questions", use_container_width=True):
             pdf_buf = build_pdf(questions)
             import tempfile
 
-
-import pathlib
-
-with st.spinner("Building your Mint Maths PDF..."):
-    pdf_buf = build_pdf(questions)
-
-if pdf_buf:
-    # Save PDF to a temporary file
-    temp_dir = pathlib.Path(tempfile.gettempdir()) / "mintmaths"
-    temp_dir.mkdir(exist_ok=True)
-    pdf_path = temp_dir / "generated.pdf"
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_buf.getbuffer())
-
-    # Create a Streamlit file download URL that opens inline
-    file_url = f"file://{pdf_path}"
-
-    st.markdown(
-        f"""
-        <div style="text-align: center; margin-top: 1.5em;">
-            <a href="{file_url}" target="_blank" class="mint-pdf-btn">
-                📖 Open Mint Maths PDF
-            </a>
-        </div>
-        <style>
-        .mint-pdf-btn {{
-            background-color: {mint_main};
-            color: {mint_text};
-            padding: 0.7em 1.4em;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-block;
-            transition: all 0.3s ease-in-out;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        .mint-pdf-btn:hover {{
-            background-color: #95dec2;
-            transform: scale(1.03);
-            text-decoration: none;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.error("⚠️ Failed to generate PDF.")
+        
+        with st.spinner("Building your Mint Maths PDF..."):
+            pdf_buf = build_pdf(questions)
+        
+        if pdf_buf:
+            # Save PDF to a temporary file
+            temp_dir = pathlib.Path(tempfile.gettempdir()) / "mintmaths"
+            temp_dir.mkdir(exist_ok=True)
+            pdf_path = temp_dir / "generated.pdf"
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_buf.getbuffer())
+        
+            # Create a Streamlit file download URL that opens inline
+            file_url = f"file://{pdf_path}"
+        
+            st.markdown(
+                f"""
+                <div style="text-align: center; margin-top: 1.5em;">
+                    <a href="{file_url}" target="_blank" class="mint-pdf-btn">
+                        📖 Open Mint Maths PDF
+                    </a>
+                </div>
+                <style>
+                .mint-pdf-btn {{
+                    background-color: {mint_main};
+                    color: {mint_text};
+                    padding: 0.7em 1.4em;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    display: inline-block;
+                    transition: all 0.3s ease-in-out;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+                .mint-pdf-btn:hover {{
+                    background-color: #95dec2;
+                    transform: scale(1.03);
+                    text-decoration: none;
+                }}
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.error("⚠️ Failed to generate PDF.")
 
 
 
