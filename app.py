@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -169,13 +170,41 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         # -----------------------------------------------------
         st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
-        with st.spinner("Preparing your PDF..."):
-            pdf_buf = build_pdf(questions, include_solutions=True)
 
-        st.download_button(
-            label="⬇️ Download PDF (Questions + Solutions)",
-            data=pdf_buf,
-            file_name="generated_questions.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+
+if st.button("📘 Generate PDF", use_container_width=True):
+    with st.spinner("Building your Mint Maths PDF..."):
+        pdf_buf = build_pdf(questions)
+        pdf_bytes = pdf_buf.getvalue()
+        b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+
+        # Create a nice, styled button that opens the PDF in a new tab
+        pdf_display_link = f"""
+        <div style="text-align: center; margin-top: 1.5em;">
+            <a href="data:application/pdf;base64,{b64_pdf}" target="_blank" class="mint-pdf-btn">
+                📖 Open Mint Maths PDF
+            </a>
+        </div>
+        <style>
+        .mint-pdf-btn {{
+            background-color: {mint_main};
+            color: {mint_text};
+            padding: 0.7em 1.4em;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: none;
+        }}
+        .mint-pdf-btn:hover {{
+            background-color: #95dec2;
+            transform: scale(1.03);
+            text-decoration: none;
+        }}
+        </style>
+        """
+
+        st.markdown(pdf_display_link, unsafe_allow_html=True)
+
