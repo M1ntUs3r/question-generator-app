@@ -145,71 +145,56 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         # -----------------------------------------------------
         with st.spinner("Building your Mint Maths PDF..."):
             pdf_buf = build_pdf(questions)
+            import tempfile
 
 
-        if pdf_buf:
-            # Convert PDF to base64
-            pdf_bytes = pdf_buf.getvalue()
-            b64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+import pathlib
+
+with st.spinner("Building your Mint Maths PDF..."):
+    pdf_buf = build_pdf(questions)
+
+if pdf_buf:
+    # Save PDF to a temporary file
+    temp_dir = pathlib.Path(tempfile.gettempdir()) / "mintmaths"
+    temp_dir.mkdir(exist_ok=True)
+    pdf_path = temp_dir / "generated.pdf"
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_buf.getbuffer())
+
+    # Create a Streamlit file download URL that opens inline
+    file_url = f"file://{pdf_path}"
+
+    st.markdown(
+        f"""
+        <div style="text-align: center; margin-top: 1.5em;">
+            <a href="{file_url}" target="_blank" class="mint-pdf-btn">
+                📖 Open Mint Maths PDF
+            </a>
+        </div>
+        <style>
+        .mint-pdf-btn {{
+            background-color: {mint_main};
+            color: {mint_text};
+            padding: 0.7em 1.4em;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .mint-pdf-btn:hover {{
+            background-color: #95dec2;
+            transform: scale(1.03);
+            text-decoration: none;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.error("⚠️ Failed to generate PDF.")
+
+
+
         
-            # Create an HTML page that displays the PDF full screen
-            pdf_viewer_html = f"""
-            <html>
-            <head>
-                <title>Mint Maths PDF</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body {{
-                        margin: 0;
-                        padding: 0;
-                        height: 100vh;
-                        background-color: #f7f9fc;
-                    }}
-                    iframe {{
-                        border: none;
-                        width: 100%;
-                        height: 100%;
-                    }}
-                </style>
-            </head>
-            <body>
-                <iframe src="data:application/pdf;base64,{b64_pdf}" allowfullscreen></iframe>
-            </body>
-            </html>
-            """
-        
-            # Encode that HTML page as a new base64 data URI
-            b64_html = base64.b64encode(pdf_viewer_html.encode()).decode()
-            pdf_page_link = f"data:text/html;base64,{b64_html}"
-        
-            # Display button that opens the PDF in a new tab
-            st.markdown(
-                f"""
-                <div style="text-align: center; margin-top: 1.5em;">
-                    <a href="{pdf_page_link}" target="_blank" class="mint-pdf-btn">
-                        📖 Open Mint Maths PDF
-                    </a>
-                </div>
-                <style>
-                .mint-pdf-btn {{
-                    background-color: {mint_main};
-                    color: {mint_text};
-                    padding: 0.7em 1.4em;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    display: inline-block;
-                    transition: all 0.3s ease-in-out;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }}
-                .mint-pdf-btn:hover {{
-                    background-color: #95dec2;
-                    transform: scale(1.03);
-                    text-decoration: none;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            st.error("⚠️ Failed to generate PDF.")
