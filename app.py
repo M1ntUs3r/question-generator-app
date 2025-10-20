@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import os
 import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
@@ -21,7 +22,6 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    # Keep your existing ordering logic
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
@@ -29,17 +29,15 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
 
 
 # -----------------------------------------------------
-# Streamlit App
+# Streamlit Config & Styling
 # -----------------------------------------------------
 
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
 
-# Mint green theme colors
-mint_main = "#A8E6CF"  # pastel mint
-mint_dark = "#379683"  # deeper mint/teal for buttons
-mint_text = "#2F4858"  # dark text
+mint_main = "#A8E6CF"
+mint_dark = "#379683"
+mint_text = "#2F4858"
 
-# --- Custom CSS styling ---
 st.markdown(
     f"""
     <style>
@@ -61,19 +59,6 @@ st.markdown(
             background-color: #2b7a6d !important;
             transform: scale(1.03);
         }}
-        .stDownloadButton button {{
-            background-color: {mint_main} !important;
-            color: {mint_text} !important;
-            border-radius: 8px !important;
-            border: none !important;
-            padding: 0.6em 1.2em !important;
-            font-weight: 600 !important;
-            transition: 0.3s ease-in-out;
-        }}
-        .stDownloadButton button:hover {{
-            background-color: #95dec2 !important;
-            transform: scale(1.03);
-        }}
         h1, h2, h3 {{
             text-align: center;
             color: {mint_dark};
@@ -83,14 +68,6 @@ st.markdown(
             padding-top: 1rem;
             padding-bottom: 3rem;
             margin: auto;
-        }}
-        .stSelectbox label {{
-            font-weight: 600 !important;
-            color: {mint_text} !important;
-        }}
-        .stNumberInput label {{
-            font-weight: 600 !important;
-            color: {mint_text} !important;
         }}
     </style>
     """,
@@ -114,7 +91,7 @@ st.markdown(
 st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
 
 # -----------------------------------------------------
-# Filters (centered)
+# Filters
 # -----------------------------------------------------
 
 years = sorted({q["year"] for q in QUESTIONS if q["year"]})
@@ -134,8 +111,6 @@ year = None if year == "Select" else year
 paper = None if paper == "Select" else paper
 topic = None if topic == "Select" else topic
 
-st.markdown("<br>", unsafe_allow_html=True)
-
 num_questions = st.number_input(
     "Number of Questions",
     min_value=1,
@@ -143,8 +118,6 @@ num_questions = st.number_input(
     value=5,
     step=1
 )
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # -----------------------------------------------------
 # Generate Questions
@@ -162,25 +135,52 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.subheader("📝 Your Question List:")
         for i, q in enumerate(questions, 1):
             qnum = q['question_id'].split('_')[-1].upper().replace("Q", "Q")
-            st.markdown(f"**{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
+            st.markdown(f"**Q{qnum} – {q['year']} {q['paper']} – {q['topic']}**")
 
-
-        # -----------------------------------------------------
-        # 📘 Add PDF Download Button
-        # -----------------------------------------------------
         st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 Download Your Question Set</h3>", unsafe_allow_html=True)
-        with st.spinner("Preparing your PDF..."):
-            pdf_buf = build_pdf(questions, include_solutions=True)
+        st.markdown(f"<h3 style='text-align:center; color:{mint_dark};'>📘 View or Download Your Question Set</h3>", unsafe_allow_html=True)
 
-        st.download_button(
-            label="⬇️ Download PDF (Questions + Solutions)",
-            data=pdf_buf,
-            file_name="generated_questions.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+        # -----------------------------------------------------
+        # Generate and save the PDF to static folder
+        # -----------------------------------------------------
+        with st.spinner("Building your Mint Maths PDF..."):
+            pdf_buf = build_pdf(questions)
 
+            if pdf_buf:
+                output_path = "static/pdf_cache/generated.pdf"
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, "wb") as f:
+                    f.write(pdf_buf.getbuffer())
 
+                pdf_url = f"/{output_path}"
 
-
+                st.markdown(
+                    f"""
+                    <div style="text-align: center; margin-top: 1.5em;">
+                        <a href="{pdf_url}" target="_blank" class="mint-pdf-btn">
+                            📖 Open Mint Maths PDF
+                        </a>
+                    </div>
+                    <style>
+                    .mint-pdf-btn {{
+                        background-color: {mint_main};
+                        color: {mint_text};
+                        padding: 0.7em 1.4em;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: inline-block;
+                        transition: all 0.3s ease-in-out;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }}
+                    .mint-pdf-btn:hover {{
+                        background-color: #95dec2;
+                        transform: scale(1.03);
+                        text-decoration: none;
+                    }}
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.error("⚠️ Failed to generate PDF.")
