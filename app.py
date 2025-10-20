@@ -172,10 +172,10 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         with st.spinner("Preparing your PDF..."):
             pdf_buf = build_pdf(questions, include_solutions=True)
 
-        st.download_button(
-            label="⬇️ Download PDF (Questions + Solutions)",
-            data=pdf_buf,
-            file_name="generated_questions.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+            st.download_button(
+                label="⬇️ Download PDF (Questions + Solutions)",
+                data=pdf_buf,
+                file_name="generated_questions.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
