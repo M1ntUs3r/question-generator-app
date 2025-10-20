@@ -3,6 +3,7 @@ import random
 import os
 import base64
 import pathlib
+import tempfile
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
