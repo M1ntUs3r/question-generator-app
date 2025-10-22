@@ -11,16 +11,11 @@ from pypdf import PdfReader, PdfWriter
 
 
 # ----------------------------------------------------------------------
-# Helper: parse a page‑range specification like "2-4,6"
+# Helper: parse page specifications like "2-4,6"
 # ----------------------------------------------------------------------
 def parse_page_spec(spec: str) -> list[int]:
-    """
-    Convert a human‑readable spec (e.g. "2-4,6") into a list of
-    zero‑based page indexes: [1, 2, 3, 5].
-    """
     if not spec:
         return []
-
     pages = set()
     for part in re.split(r"[,\s]+", spec.strip()):
         if not part:
@@ -47,51 +42,45 @@ def parse_page_spec(spec: str) -> list[int]:
 
 
 # ----------------------------------------------------------------------
-# Helper: create a coloured cover page that lists the selected questions
+# Helper: create a cover page that lists the provided titles
 # ----------------------------------------------------------------------
 def make_cover_page(question_titles: list[str]) -> PdfReader:
-    """
-    Returns a PdfReader containing a single (or multi‑page) cover.
-    Each title is a short string like "Q12 – 2022 P1 – Algebra".
-    """
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
 
-    # Colours as ReportLab Color objects
     mint_dark = colors.HexColor("#379683")
     gray_color = colors.gray
 
-    # --- Header banner ---
+    # Header banner
     c.setFillColor(mint_dark)
     c.rect(0, h - 80, w, 80, stroke=0, fill=1)
 
-    # --- Title ---
+    # Title
     c.setFont("Helvetica-Bold", 22)
     c.setFillColor(colors.white)
     c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
 
-    # --- Generation timestamp ---
+    # Timestamp
     c.setFont("Helvetica", 11)
     c.setFillColor(gray_color)
     ts = datetime.now().strftime("%d %b %Y, %H:%M")
     c.drawCentredString(w / 2, h - 95, f"Generated on {ts}")
 
-    # --- List heading ---
+    # List heading
     c.setFont("Helvetica-Bold", 14)
     c.setFillColor(mint_dark)
     c.drawString(40, h - 130, "Included Questions:")
 
-    # --- List items ---
+    # List items
     c.setFont("Helvetica", 12)
     c.setFillColor(colors.black)
     y = h - 155
     for i, title in enumerate(question_titles, start=1):
         c.drawString(60, y, f"{i}. {title}")
         y -= 18
-        if y < 60:                     # start a new page if we run out of space
+        if y < 60:                     # start a new page if needed
             c.showPage()
-            # repeat the banner on the new page (optional)
             c.setFillColor(mint_dark)
             c.rect(0, h - 80, w, 80, stroke=0, fill=1)
             y = h - 110
@@ -104,13 +93,12 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
 
 
 # ----------------------------------------------------------------------
-# Internal helper: add selected pages from a source PDF to a PdfWriter
+# Internal helper: add pages from a source PDF to the writer
 # ----------------------------------------------------------------------
 def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> None:
     """
-    Reads ``src_path`` (if it exists), extracts the pages indicated by
-    ``page_spec`` and appends them to ``writer``.
-    ``label`` is only used for debug prints.
+    Append the pages described by ``page_spec`` from ``src_path``.
+    ``label`` is only used for diagnostic prints.
     """
     if not src_path:
         return
@@ -128,25 +116,31 @@ def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> 
 
 
 # ----------------------------------------------------------------------
-# Public API: build the final PDF (cover → questions → solutions)
+# Public API: assemble the final PDF
 # ----------------------------------------------------------------------
-def build_pdf(selected_questions: list[dict], include_solutions: bool = True) -> BytesIO:
+def build_pdf(
+    records: list[dict],
+    cover_titles: list[str] | None = None,
+    include_solutions: bool = True,
+) -> BytesIO:
     """
-    Returns a BytesIO object containing the assembled PDF.
-    ``selected_questions`` must be a list of dicts with at least:
-        - question_id, year, paper, topic
-        - pdf_question (path to the question PDF)
-        - q_pages (page spec for the question PDF)
-        - pdf_solution (optional path to solution PDF)
-        - s_pages (page spec for the solution PDF)
+    ``records`` – the immutable list created in app.py.  Each dict contains:
+        * question_id
+        * title                – full string for the cover page
+        * pdf_question         – path to the question PDF
+        * q_pages              – page spec for the question PDF
+        * pdf_solution (opt.)  – path to the solution PDF
+        * s_pages (opt.)       – page spec for the solution PDF
     """
     writer = PdfWriter()
 
-    # ---------- 1️⃣ Cover ----------
-    cover_titles = [
-        f"{q['question_id'].split('_')[-1].upper()} – {q['year']} {q['paper']} – {q['topic']}"
-        for q in selected_questions
-    ]
+    # --------------------------------------------------------------
+    # 1️⃣ Cover page
+    # --------------------------------------------------------------
+    if cover_titles is None:
+        # Defensive fallback – should never happen now that we always pass it
+        cover_titles = [rec["title"] for rec in records]
+
     try:
         cover_reader = make_cover_page(cover_titles)
         for page in cover_reader.pages:
@@ -154,17 +148,23 @@ def build_pdf(selected_questions: list[dict], include_solutions: bool = True) ->
     except Exception as exc:
         print(f"⚠️ Failed to create cover page: {exc}")
 
-    # ---------- 2️⃣ Question PDFs ----------
-    for q in selected_questions:
-        _add_pages(writer, q.get("pdf_question"), q.get("q_pages", ""), "Question")
+    # --------------------------------------------------------------
+    # 2️⃣ Question PDFs – **preserve the exact order of records**
+    # --------------------------------------------------------------
+    for rec in records:
+        _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), "Question")
 
-    # ---------- 3️⃣ Solution PDFs (optional) ----------
+    # --------------------------------------------------------------
+    # 3️⃣ Solution PDFs (optional) – same order as questions
+    # --------------------------------------------------------------
     if include_solutions:
-        for q in selected_questions:
-            _add_pages(writer, q.get("pdf_solution"), q.get("s_pages", ""), "Solution")
+        for rec in records:
+            _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), "Solution")
 
-    # ---------- 4️⃣ Return the bytes ----------
+    # --------------------------------------------------------------
+    # 4️⃣ Return the finished PDF as a BytesIO object
+    # --------------------------------------------------------------
     out_buf = BytesIO()
-    writer.write(out_buf)          # recent pypdf versions close the writer automatically
+    writer.write(out_buf)
     out_buf.seek(0)
     return out_buf
