@@ -1,189 +1,161 @@
-# modules/pdf_builder.py
-from io import BytesIO
-from datetime import datetime
-import re
-
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-
-from pypdf import PdfReader, PdfWriter
-
+# app.py
+import streamlit as st
+import random
+from modules.data_handler import QUESTIONS
+from modules.pdf_builder import build_pdf
 
 # ----------------------------------------------------------------------
-# Helper: parse page specifications like "2-4,6"
+# Helper: pick random questions (unchanged logic)
 # ----------------------------------------------------------------------
-def parse_page_spec(spec: str) -> list[int]:
-    """
-    Convert a human‑readable spec (e.g. "2-4,6") into a list of
-    zero‑based page indexes: [1, 2, 3, 5].
-    """
-    if not spec:
+def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
+    filtered = df
+    if year:
+        filtered = [q for q in filtered if q["year"] == year]
+    if paper:
+        filtered = [q for q in filtered if q["paper"].upper() == paper.upper()]
+    if topic:
+        filtered = [q for q in filtered if q["topic"] == topic]
+
+    if not filtered:
         return []
-    pages = set()
-    for part in re.split(r"[,\s]+", spec.strip()):
-        if not part:
-            continue
-        if "-" in part:
-            a, b = part.split("-", 1)
-            try:
-                start, end = int(a), int(b)
-                if start < 1 or end < 1:
-                    continue
-                for p in range(start, end + 1):
-                    pages.add(p - 1)          # zero‑based index
-            except ValueError:
-                continue
-        else:
-            try:
-                p = int(part)
-                if p < 1:
-                    continue
-                pages.add(p - 1)
-            except ValueError:
-                continue
-    return sorted(pages)
+
+    # deterministic ordering before sampling
+    filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
+    selection = filtered if len(filtered) <= n else random.sample(filtered, n)
+    selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
+    return selection
 
 
 # ----------------------------------------------------------------------
-# Helper: create a cover page that lists the provided titles
+# Page configuration & custom CSS (keeps the mint theme)
 # ----------------------------------------------------------------------
-def make_cover_page(question_titles: list[str]) -> PdfReader:
-    """
-    Returns a PdfReader containing a single (or multi‑page) cover.
-    Each entry in ``question_titles`` is printed verbatim.
-    """
-    buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    w, h = A4
+st.set_page_config(page_title="Mint Maths Generator", layout="centered")
+mint_main = "#A8E6CF"
+mint_dark = "#379683"
+mint_text = "#2F4858"
 
-    mint_dark = colors.HexColor("#379683")
-    gray_color = colors.gray
-
-    # Header banner
-    c.setFillColor(mint_dark)
-    c.rect(0, h - 80, w, 80, stroke=0, fill=1)
-
-    # Title
-    c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(colors.white)
-    c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
-
-    # Timestamp
-    c.setFont("Helvetica", 11)
-    c.setFillColor(gray_color)
-    ts = datetime.now().strftime("%d %b %Y, %H:%M")
-    c.drawCentredString(w / 2, h - 95, f"Generated on {ts}")
-
-    # List heading
-    c.setFont("Helvetica-Bold", 14)
-    c.setFillColor(mint_dark)
-    c.drawString(40, h - 130, "Included Questions:")
-
-    # List items
-    c.setFont("Helvetica", 12)
-    c.setFillColor(colors.black)
-    y = h - 155
-    for i, title in enumerate(question_titles, start=1):
-        c.drawString(60, y, f"{i}. {title}")
-        y -= 18
-        if y < 60:                     # start a new page if we run out of space
-            c.showPage()
-            # repeat the banner on the new page (optional but nice)
-            c.setFillColor(mint_dark)
-            c.rect(0, h - 80, w, 80, stroke=0, fill=1)
-            y = h - 110
-            c.setFont("Helvetica", 12)
-            c.setFillColor(colors.black)
-
-    c.save()
-    buf.seek(0)
-    return PdfReader(buf)
-
+st.markdown(
+    f"""
+    <style>
+        body {{background-color:#f7f9fc;color:{mint_text};font-family:'Poppins',sans-serif;}}
+        .stButton button {{background-color:{mint_dark}!important;color:white!important;
+                           border-radius:8px!important;padding:0.6em 1.2em!important;
+                           font-weight:500!important;transition:0.3s;}}
+        .stButton button:hover {{background-color:#2b7a6d!important;transform:scale(1.03);}}
+        .stDownloadButton button {{background-color:{mint_main}!important;color:{mint_text}!important;
+                                   border-radius:8px!important;padding:0.6em 1.2em!important;
+                                   font-weight:600!important;transition:0.3s;}}
+        .stDownloadButton button:hover {{background-color:#95dec2!important;transform:scale(1.03);}}
+        h1,h2,h3 {{text-align:center;color:{mint_dark};}}
+        .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
+        .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ----------------------------------------------------------------------
-# Internal helper: add pages from a source PDF to the writer
+# Header
 # ----------------------------------------------------------------------
-def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> None:
-    """
-    Append the pages described by ``page_spec`` from ``src_path``.
-    ``label`` is only used for diagnostic prints.
-    """
-    if not src_path:
-        return
-    try:
-        with open(src_path, "rb") as f:
-            reader = PdfReader(f)
-            pages = parse_page_spec(page_spec)
-            for p in pages:
-                if 0 <= p < len(reader.pages):
-                    writer.add_page(reader.pages[p])
-                else:
-                    print(f"⚠️ {label}: page {p+1} out of range in {src_path}")
-    except Exception as exc:
-        print(f"⚠️ {label}: could not process {src_path} → {exc}")
-
+st.markdown(
+    f"""
+    <h1>📘 Mint Maths Question Generator</h1>
+    <p style='text-align:center;color:{mint_text};'>
+        Generate random practice questions with optional filters below
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------
-# Public API: assemble the final PDF
+# Filters
 # ----------------------------------------------------------------------
-def build_pdf(
-    records: list[dict],
-    cover_titles: list[str] | None = None,
-    include_solutions: bool = True,
-) -> BytesIO:
-    """
-    Assemble the final PDF.
+years = sorted({q["year"] for q in QUESTIONS if q["year"]})
+papers = sorted({q["paper"] for q in QUESTIONS if q["paper"]})
+topics = sorted({q["topic"] for q in QUESTIONS if q["topic"]})
 
-    Parameters
-    ----------
-    records : list[dict]
-        The immutable list created in ``app.py``.  Each dict must contain:
-            * question_id
-            * title                – full string for the cover page
-            * pdf_question         – path to the question PDF
-            * q_pages              – page spec for the question PDF
-            * pdf_solution (opt.)  – path to the solution PDF
-            * s_pages (opt.)       – page spec for the solution PDF
-    cover_titles : list[str] | None
-        Optional explicit list of titles for the cover page.
-        If omitted we fall back to ``rec["title"]`` for each record.
-    include_solutions : bool
-        Whether to append solution PDFs after the questions.
-    """
-    writer = PdfWriter()
+col1, col2, col3 = st.columns(3)
+with col1:
+    year = st.selectbox("Year", ["Select"] + years)
+with col2:
+    paper = st.selectbox("Paper", ["Select"] + papers)
+with col3:
+    topic = st.selectbox("Topic", ["Select"] + topics)
 
-    # --------------------------------------------------------------
-    # 1️⃣ Cover page
-    # --------------------------------------------------------------
-    if cover_titles is None:
-        # Defensive fallback – should never happen now that we always pass it
-        cover_titles = [rec["title"] for rec in records]
+year = None if year == "Select" else year
+paper = None if paper == "Select" else paper
+topic = None if topic == "Select" else topic
 
-    try:
-        cover_reader = make_cover_page(cover_titles)
-        for page in cover_reader.pages:
-            writer.add_page(page)
-    except Exception as exc:
-        print(f"⚠️ Failed to create cover page: {exc}")
+num_questions = st.number_input(
+    "Number of Questions",
+    min_value=1,
+    max_value=30,
+    value=5,
+    step=1,
+)
 
-    # --------------------------------------------------------------
-    # 2️⃣ Question PDFs – preserve the exact order of records
-    # --------------------------------------------------------------
-    for rec in records:
-        _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), "Question")
+# ----------------------------------------------------------------------
+# 1️⃣ Generate random questions → build an **immutable record list**
+# ----------------------------------------------------------------------
+if st.button("🎲 Generate Questions", use_container_width=True):
+    with st.spinner("Selecting your random questions…"):
+        raw_selection = generate_random_questions(
+            QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic
+        )
 
-    # --------------------------------------------------------------
-    # 3️⃣ Solution PDFs (optional) – same order as questions
-    # --------------------------------------------------------------
-    if include_solutions:
-        for rec in records:
-            _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), "Solution")
+    if not raw_selection:
+        st.warning("⚠️ No questions found for the selected filters.")
+        # clear any previously stored data
+        st.session_state.pop("selected_records", None)
+    else:
+        # Build a stable record for each row – this will travel through the whole pipeline unchanged.
+        records = []
+        for row in raw_selection:
+            records.append(
+                {
+                    "question_id": row["question_id"],
+                    "title": f"{row['question_id']} – {row['year']} {row['paper']} – {row['topic']}",
+                    "pdf_question": row.get("pdf_question"),
+                    "q_pages": row.get("q_pages", ""),
+                    "pdf_solution": row.get("pdf_solution"),
+                    "s_pages": row.get("s_pages", ""),
+                }
+            )
+        st.session_state.selected_records = records
+        st.success(f"✅ Generated {len(records)} question(s).")
 
-    # --------------------------------------------------------------
-    # 4️⃣ Return the finished PDF as a BytesIO object
-    # --------------------------------------------------------------
-    out_buf = BytesIO()
-    writer.write(out_buf)
-    out_buf.seek(0)
-    return out_buf
+# ----------------------------------------------------------------------
+# 2️⃣ Show the list (read‑only) whenever we have records
+# ----------------------------------------------------------------------
+if st.session_state.get("selected_records"):
+    st.subheader("📝 Your Question List:")
+    for i, rec in enumerate(st.session_state.selected_records, 1):
+        st.markdown(f"**{rec['title']}**")
+
+    # ------------------------------------------------------------------
+    # 3️⃣ PDF download section
+    # ------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown(
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
+        unsafe_allow_html=True,
+    )
+
+    # Build the cover titles directly from the stored records
+    cover_titles = [rec["title"] for rec in st.session_state.selected_records]
+
+    with st.spinner("Building PDF…"):
+        pdf_bytes = build_pdf(
+            st.session_state.selected_records,   # <-- the immutable list
+            cover_titles=cover_titles,
+            include_solutions=True,
+        )
+
+    st.download_button(
+        label="⬇️ Download Mint Maths PDF",
+        data=pdf_bytes,
+        file_name="mintmaths_questions.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
