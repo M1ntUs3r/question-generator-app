@@ -1,4 +1,3 @@
-# app.py
 import re
 import streamlit as st
 import random
@@ -10,14 +9,14 @@ from modules.pdf_builder import build_pdf
 
 
 # ----------------------------------------------------------------------
-# 🔧 Temporary file setup (prevents memory overflow on mobile)
+# 🔧 Temporary file setup (safe for mobile & large PDFs)
 # ----------------------------------------------------------------------
 TMP_DIR = tempfile.mkdtemp(prefix="mintmaths_")
 atexit.register(lambda: shutil.rmtree(TMP_DIR, ignore_errors=True))
 
 
 # ----------------------------------------------------------------------
-# Helper: pick random questions
+# Helper functions
 # ----------------------------------------------------------------------
 def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
@@ -46,19 +45,14 @@ def short_question_label(question_id):
 
     match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
     if match:
-        return "Q{}".format(match.group(1))
+        return f"Q{match.group(1)}"
 
-    last_chunk = question_id.split("_")[-1].strip()
-    if not last_chunk:
-        return question_id
-    last_chunk = last_chunk.upper()
-    if last_chunk.startswith("Q"):
-        return last_chunk
-    return "Q{}".format(last_chunk)
+    last_chunk = question_id.split("_")[-1].strip().upper()
+    return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
 
 
 # ----------------------------------------------------------------------
-# Streamlit setup (mint theme)
+# Streamlit setup (Mint Maths theme)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
 mint_main = "#A8E6CF"
@@ -169,7 +163,6 @@ if st.session_state.get("selected_records"):
         unsafe_allow_html=True,
     )
 
-    # ✅ Generate PDF when user clicks
     if st.button("📘 Generate PDF", use_container_width=True):
         with st.spinner("Building your Mint Maths PDF..."):
             pdf_bytes = build_pdf(
@@ -177,12 +170,11 @@ if st.session_state.get("selected_records"):
                 include_solutions=True,
             )
 
-        # Save PDF safely to temp dir
+        # ✅ Always write raw bytes (consistent with updated pdf_builder)
         pdf_tmp_path = os.path.join(TMP_DIR, "mintmaths_questions.pdf")
         with open(pdf_tmp_path, "wb") as f:
-            f.write(pdf_bytes.getvalue())
+            f.write(pdf_bytes)
 
-        # --- Standard download button ---
         st.download_button(
             label="⬇️ Download Mint Maths PDF",
             data=pdf_bytes,
@@ -191,12 +183,11 @@ if st.session_state.get("selected_records"):
             use_container_width=True,
         )
 
-        # --- Open in new tab (native mobile + desktop) ---
-        pdf_url = f"file://{quote(pdf_tmp_path)}"
+        # ✅ Open directly in a new browser tab (works on mobile too)
         st.markdown(
             f"""
             <div style="text-align:center;margin-top:1em;">
-                <a href="{pdf_url}" target="_blank"
+                <a href="file://{quote(pdf_tmp_path)}" target="_blank"
                    style="background-color:{mint_main};color:{mint_text};
                           padding:0.7em 1.4em;border-radius:8px;
                           text-decoration:none;font-weight:600;
