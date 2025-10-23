@@ -172,7 +172,7 @@ if st.button("📘 Generate PDF", use_container_width=True):
 
         # --- Open in new tab (mobile + desktop friendly) ---
         import base64
-        pdf_b64 = base64.b64encode(pdf_bytes).decode()
+        pdf_b64 = base64.b64encode(pdf_bytes.getvalue()).decode()
         pdf_viewer = f"data:application/pdf;base64,{pdf_b64}"
 
         st.markdown(
