@@ -2,14 +2,22 @@
 import re
 import streamlit as st
 import random
-import tempfile
-import base64
+import tempfile, shutil, atexit, os
+from urllib.parse import quote
+
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
 
 # ----------------------------------------------------------------------
-# Helper: pick random questions (unchanged logic)
+# 🔧 Temporary file setup (prevents memory overflow on mobile)
+# ----------------------------------------------------------------------
+TMP_DIR = tempfile.mkdtemp(prefix="mintmaths_")
+atexit.register(lambda: shutil.rmtree(TMP_DIR, ignore_errors=True))
+
+
+# ----------------------------------------------------------------------
+# Helper: pick random questions
 # ----------------------------------------------------------------------
 def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
@@ -30,25 +38,29 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
 
 
 def short_question_label(question_id):
-    """Return a concise label like ``Q7`` from IDs such as ``2014_P1_Q07``."""
+    """Return a concise label like Q7 from IDs such as 2014_P1_Q07."""
     if not question_id:
         return ""
     if not isinstance(question_id, str):
         return str(question_id)
+
     match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
     if match:
-        return f"Q{match.group(1)}"
-    last_chunk = question_id.split("_")[-1].strip().upper()
-    if not last_chunk.startswith("Q"):
-        last_chunk = f"Q{last_chunk}"
-    return last_chunk
+        return "Q{}".format(match.group(1))
+
+    last_chunk = question_id.split("_")[-1].strip()
+    if not last_chunk:
+        return question_id
+    last_chunk = last_chunk.upper()
+    if last_chunk.startswith("Q"):
+        return last_chunk
+    return "Q{}".format(last_chunk)
 
 
 # ----------------------------------------------------------------------
-# Page configuration & custom CSS (mint theme)
+# Streamlit setup (mint theme)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
-
 mint_main = "#A8E6CF"
 mint_dark = "#379683"
 mint_text = "#2F4858"
@@ -107,11 +119,15 @@ paper = None if paper == "Select" else paper
 topic = None if topic == "Select" else topic
 
 num_questions = st.number_input(
-    "Number of Questions", min_value=1, max_value=30, value=5, step=1
+    "Number of Questions",
+    min_value=1,
+    max_value=30,
+    value=5,
+    step=1,
 )
 
 # ----------------------------------------------------------------------
-# 1️⃣ Generate random questions → build immutable record list
+# 1️⃣ Generate random questions
 # ----------------------------------------------------------------------
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions…"):
@@ -140,11 +156,11 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# 2️⃣ Show the list whenever we have records
+# 2️⃣ Show list + PDF builder
 # ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
-    for rec in st.session_state.selected_records:
+    for i, rec in enumerate(st.session_state.selected_records, 1):
         st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
@@ -152,16 +168,21 @@ if st.session_state.get("selected_records"):
         f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
-    # ✅ Only build the PDF when user clicks
-if st.button("📘 Generate PDF", use_container_width=True):
-    with st.spinner("Building your Mint Maths PDF..."):
-        pdf_bytes, pdf_path = build_pdf(
-            st.session_state.selected_records,
-            include_solutions=True,
-        )
 
-    if pdf_bytes:
-        # --- Download button (works offline) ---
+    # ✅ Generate PDF when user clicks
+    if st.button("📘 Generate PDF", use_container_width=True):
+        with st.spinner("Building your Mint Maths PDF..."):
+            pdf_bytes = build_pdf(
+                st.session_state.selected_records,
+                include_solutions=True,
+            )
+
+        # Save PDF safely to temp dir
+        pdf_tmp_path = os.path.join(TMP_DIR, "mintmaths_questions.pdf")
+        with open(pdf_tmp_path, "wb") as f:
+            f.write(pdf_bytes.getvalue())
+
+        # --- Standard download button ---
         st.download_button(
             label="⬇️ Download Mint Maths PDF",
             data=pdf_bytes,
@@ -170,15 +191,12 @@ if st.button("📘 Generate PDF", use_container_width=True):
             use_container_width=True,
         )
 
-        # --- Open in new tab (mobile + desktop friendly) ---
-        import base64
-        pdf_b64 = base64.b64encode(pdf_bytes.getvalue()).decode()
-        pdf_viewer = f"data:application/pdf;base64,{pdf_b64}"
-
+        # --- Open in new tab (native mobile + desktop) ---
+        pdf_url = f"file://{quote(pdf_tmp_path)}"
         st.markdown(
             f"""
             <div style="text-align:center;margin-top:1em;">
-                <a href="{pdf_viewer}" target="_blank"
+                <a href="{pdf_url}" target="_blank"
                    style="background-color:{mint_main};color:{mint_text};
                           padding:0.7em 1.4em;border-radius:8px;
                           text-decoration:none;font-weight:600;
@@ -189,8 +207,3 @@ if st.button("📘 Generate PDF", use_container_width=True):
             """,
             unsafe_allow_html=True,
         )
-    else:
-        st.error("⚠️ Something went wrong — no valid pages were added to the PDF.")
-
-
-   
