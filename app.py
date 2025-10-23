@@ -35,7 +35,7 @@ def short_question_label(question_id):
 
     match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
     if match:
-        return f"Q{match.group(1)}"
+        return "Q{}".format(match.group(1))
 
     last_chunk = question_id.split("_")[-1].strip()
     if not last_chunk:
@@ -43,7 +43,7 @@ def short_question_label(question_id):
     last_chunk = last_chunk.upper()
     if last_chunk.startswith("Q"):
         return last_chunk
-    return f"Q{last_chunk}
+    return "Q{}".format(last_chunk)
 
 
 # ----------------------------------------------------------------------
