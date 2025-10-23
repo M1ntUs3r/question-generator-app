@@ -1,12 +1,14 @@
 # modules/pdf_builder.py
+import os
+import re
+import tempfile
+import warnings
 from io import BytesIO
 from datetime import datetime
-import re
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-
 from pypdf import PdfReader, PdfWriter
 
 
@@ -24,25 +26,20 @@ def parse_page_spec(spec: str) -> list[int]:
             a, b = part.split("-", 1)
             try:
                 start, end = int(a), int(b)
-                if start < 1 or end < 1:
-                    continue
                 for p in range(start, end + 1):
-                    pages.add(p - 1)          # zero‑based
+                    pages.add(p - 1)
             except ValueError:
                 continue
         else:
             try:
-                p = int(part)
-                if p < 1:
-                    continue
-                pages.add(p - 1)
+                pages.add(int(part) - 1)
             except ValueError:
                 continue
     return sorted(pages)
 
 
 # ----------------------------------------------------------------------
-# Helper: create a cover page that lists the provided titles
+# Helper: create Mint Maths cover page
 # ----------------------------------------------------------------------
 def make_cover_page(question_titles: list[str]) -> PdfReader:
     buf = BytesIO()
@@ -52,40 +49,36 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
     mint_dark = colors.HexColor("#379683")
     gray_color = colors.gray
 
-    # Header banner
+    # Header
     c.setFillColor(mint_dark)
     c.rect(0, h - 80, w, 80, stroke=0, fill=1)
 
-    # Title
     c.setFont("Helvetica-Bold", 22)
     c.setFillColor(colors.white)
     c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
 
-    # Timestamp
     c.setFont("Helvetica", 11)
     c.setFillColor(gray_color)
     ts = datetime.now().strftime("%d %b %Y, %H:%M")
     c.drawCentredString(w / 2, h - 95, f"Generated on {ts}")
 
-    # List heading
     c.setFont("Helvetica-Bold", 14)
     c.setFillColor(mint_dark)
     c.drawString(40, h - 130, "Included Questions:")
 
-    # List items
     c.setFont("Helvetica", 12)
     c.setFillColor(colors.black)
     y = h - 155
     for i, title in enumerate(question_titles, start=1):
         c.drawString(60, y, f"{i}. {title}")
         y -= 18
-        if y < 60:                     # start a new page if needed
+        if y < 60:
             c.showPage()
             c.setFillColor(mint_dark)
             c.rect(0, h - 80, w, 80, stroke=0, fill=1)
-            y = h - 110
             c.setFont("Helvetica", 12)
             c.setFillColor(colors.black)
+            y = h - 110
 
     c.save()
     buf.seek(0)
@@ -93,91 +86,90 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
 
 
 # ----------------------------------------------------------------------
-# Internal helper: add pages from a source PDF to the writer
+# Internal: add pages safely from a source PDF
 # ----------------------------------------------------------------------
 def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> None:
-    """
-    Append the pages described by ``page_spec`` from ``src_path``.
-    ``label`` is only used for diagnostic prints.
-    """
     if not src_path:
         return
+
+    # Normalize path
+    if not os.path.isabs(src_path):
+        src_path = os.path.join("static", "pdf_cache", os.path.basename(src_path))
+
+    if not os.path.exists(src_path):
+        warnings.warn(f"⚠️ {label}: missing file {src_path}")
+        return
+
     try:
         with open(src_path, "rb") as f:
             reader = PdfReader(f)
-            spec_text = (page_spec or "").strip()
-            pages = parse_page_spec(spec_text)
+            pages = parse_page_spec(page_spec)
+            if not pages:
+                pages = list(range(len(reader.pages)))
 
-            if not pages:  # No explicit page selection → include everything
-                if spec_text:
-                    print(
-                        f"⚠️ {label}: page spec '{spec_text}' yielded no pages; "
-                        "including all pages instead."
-                    )
-                for page in reader.pages:
-                    writer.add_page(page)
-                return
-                
             for p in pages:
                 if 0 <= p < len(reader.pages):
                     writer.add_page(reader.pages[p])
                 else:
-                    print(f"⚠️ {label}: page {p+1} out of range in {src_path}")
+                    warnings.warn(f"⚠️ {label}: page {p+1} out of range in {src_path}")
     except Exception as exc:
-        print(f"⚠️ {label}: could not process {src_path} → {exc}")
+        warnings.warn(f"⚠️ {label}: could not read {src_path} ({exc})")
 
 
 # ----------------------------------------------------------------------
-# Public API: assemble the final PDF
+# Public: build the full combined PDF
 # ----------------------------------------------------------------------
 def build_pdf(
     records: list[dict],
     cover_titles: list[str] | None = None,
     include_solutions: bool = True,
-) -> BytesIO:
+):
     """
-    ``records`` – the immutable list created in app.py.  Each dict contains:
-        * question_id
-        * title                – full string for the cover page
-        * pdf_question         – path to the question PDF
-        * q_pages              – page spec for the question PDF
-        * pdf_solution (opt.)  – path to the solution PDF
-        * s_pages (opt.)       – page spec for the solution PDF
+    Returns a tuple: (BytesIO, file_path)
+    - BytesIO: for Streamlit download_button
+    - file_path: for in-browser viewing
     """
+
     writer = PdfWriter()
 
     # --------------------------------------------------------------
-    # 1️⃣ Cover page
+    # 1️⃣ Cover Page
     # --------------------------------------------------------------
     if cover_titles is None:
-        # Defensive fallback – should never happen now that we always pass it
         cover_titles = [rec["title"] for rec in records]
-
     try:
         cover_reader = make_cover_page(cover_titles)
         for page in cover_reader.pages:
             writer.add_page(page)
     except Exception as exc:
-        print(f"⚠️ Failed to create cover page: {exc}")
+        warnings.warn(f"⚠️ Failed to create cover page ({exc})")
 
     # --------------------------------------------------------------
-    # 2️⃣ Question PDFs – **preserve the exact order of records**
+    # 2️⃣ Questions
     # --------------------------------------------------------------
     for rec in records:
         _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), "Question")
 
     # --------------------------------------------------------------
-    # 3️⃣ Solution PDFs (optional) – same order as questions
+    # 3️⃣ Solutions
     # --------------------------------------------------------------
     if include_solutions:
         for rec in records:
             _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), "Solution")
 
     # --------------------------------------------------------------
-    # 4️⃣ Return the finished PDF as a BytesIO object
+    # 4️⃣ Write to temporary file
     # --------------------------------------------------------------
+    temp_dir = tempfile.mkdtemp(prefix="mintmaths_")
+    out_path = os.path.join(temp_dir, "mintmaths_generated.pdf")
+
+    with open(out_path, "wb") as out_f:
+        writer.write(out_f)
+
+    # Also return as BytesIO (for download button)
     out_buf = BytesIO()
-    writer.write(out_buf)
+    with open(out_path, "rb") as f_in:
+        out_buf.write(f_in.read())
     out_buf.seek(0)
-    return out_buf
-  
+
+    return out_buf, out_path
