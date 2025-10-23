@@ -2,8 +2,11 @@
 import re
 import streamlit as st
 import random
+import tempfile
+import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
+
 
 # ----------------------------------------------------------------------
 # Helper: pick random questions (unchanged logic)
@@ -20,11 +23,11 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    # deterministic ordering before sampling
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     return selection
+
 
 def short_question_label(question_id):
     """Return a concise label like ``Q7`` from IDs such as ``2014_P1_Q07``."""
@@ -32,24 +35,20 @@ def short_question_label(question_id):
         return ""
     if not isinstance(question_id, str):
         return str(question_id)
-
     match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
     if match:
-        return "Q{}".format(match.group(1))
-
-    last_chunk = question_id.split("_")[-1].strip()
-    if not last_chunk:
-        return question_id
-    last_chunk = last_chunk.upper()
-    if last_chunk.startswith("Q"):
-        return last_chunk
-    return "Q{}".format(last_chunk)
+        return f"Q{match.group(1)}"
+    last_chunk = question_id.split("_")[-1].strip().upper()
+    if not last_chunk.startswith("Q"):
+        last_chunk = f"Q{last_chunk}"
+    return last_chunk
 
 
 # ----------------------------------------------------------------------
-# Page configuration & custom CSS (keeps the mint theme)
+# Page configuration & custom CSS (mint theme)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
+
 mint_main = "#A8E6CF"
 mint_dark = "#379683"
 mint_text = "#2F4858"
@@ -108,15 +107,11 @@ paper = None if paper == "Select" else paper
 topic = None if topic == "Select" else topic
 
 num_questions = st.number_input(
-    "Number of Questions",
-    min_value=1,
-    max_value=30,
-    value=5,
-    step=1,
+    "Number of Questions", min_value=1, max_value=30, value=5, step=1
 )
 
 # ----------------------------------------------------------------------
-# 1️⃣ Generate random questions → build an **immutable record list**
+# 1️⃣ Generate random questions → build immutable record list
 # ----------------------------------------------------------------------
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions…"):
@@ -126,10 +121,8 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 
     if not raw_selection:
         st.warning("⚠️ No questions found for the selected filters.")
-        # clear any previously stored data
         st.session_state.pop("selected_records", None)
     else:
-        # Build a stable record for each row – this will travel through the whole pipeline unchanged.
         records = []
         for row in raw_selection:
             label = short_question_label(row["question_id"])
@@ -147,36 +140,57 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# 2️⃣ Show the list (read‑only) whenever we have records
+# 2️⃣ Show the list whenever we have records
 # ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
-    for i, rec in enumerate(st.session_state.selected_records, 1):
+    for rec in st.session_state.selected_records:
         st.markdown(f"**{rec['title']}**")
 
-    # ------------------------------------------------------------------
-    # 3️⃣ PDF download section
-    # ------------------------------------------------------------------
     st.markdown("---")
     st.markdown(
         f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
-
-    # Build the cover titles directly from the stored records
-    cover_titles = [rec["title"] for rec in st.session_state.selected_records]
-
-    with st.spinner("Building PDF…"):
-        pdf_bytes = build_pdf(
-            st.session_state.selected_records,   # <-- the immutable list
-            cover_titles=cover_titles,
+    # ✅ Only build the PDF when user clicks
+if st.button("📘 Generate PDF", use_container_width=True):
+    with st.spinner("Building your Mint Maths PDF..."):
+        pdf_bytes, pdf_path = build_pdf(
+            st.session_state.selected_records,
             include_solutions=True,
         )
 
-    st.download_button(
-        label="⬇️ Download Mint Maths PDF",
-        data=pdf_bytes,
-        file_name="mintmaths_questions.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
+    if pdf_bytes:
+        # --- Download button (works offline) ---
+        st.download_button(
+            label="⬇️ Download Mint Maths PDF",
+            data=pdf_bytes,
+            file_name="mintmaths_questions.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+        # --- Open in new tab (mobile + desktop friendly) ---
+        import base64
+        pdf_b64 = base64.b64encode(pdf_bytes).decode()
+        pdf_viewer = f"data:application/pdf;base64,{pdf_b64}"
+
+        st.markdown(
+            f"""
+            <div style="text-align:center;margin-top:1em;">
+                <a href="{pdf_viewer}" target="_blank"
+                   style="background-color:{mint_main};color:{mint_text};
+                          padding:0.7em 1.4em;border-radius:8px;
+                          text-decoration:none;font-weight:600;
+                          box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    📖 Open PDF in New Tab
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.error("⚠️ Something went wrong — no valid pages were added to the PDF.")
+
+
+   
