@@ -1,4 +1,5 @@
 # app.py
+import re
 import streamlit as st
 import random
 from modules.data_handler import QUESTIONS
@@ -24,6 +25,25 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     return selection
+
+def short_question_label(question_id):
+    """Return a concise label like ``Q7`` from IDs such as ``2014_P1_Q07``."""
+    if not question_id:
+        return ""
+    if not isinstance(question_id, str):
+        return str(question_id)
+
+    match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
+    if match:
+        return f"Q{match.group(1)}"
+
+    last_chunk = question_id.split("_")[-1].strip()
+    if not last_chunk:
+        return question_id
+    last_chunk = last_chunk.upper()
+    if last_chunk.startswith("Q"):
+        return last_chunk
+    return f"Q{last_chunk}
 
 
 # ----------------------------------------------------------------------
@@ -112,10 +132,11 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         # Build a stable record for each row – this will travel through the whole pipeline unchanged.
         records = []
         for row in raw_selection:
+            label = short_question_label(row["question_id"])
             records.append(
                 {
                     "question_id": row["question_id"],
-                    "title": f"{row['question_id']} – {row['year']} {row['paper']} – {row['topic']}",
+                    "title": f"{label} – {row['year']} {row['paper']} – {row['topic']}",
                     "pdf_question": row.get("pdf_question"),
                     "q_pages": row.get("q_pages", ""),
                     "pdf_solution": row.get("pdf_solution"),
