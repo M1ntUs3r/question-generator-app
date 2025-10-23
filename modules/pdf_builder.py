@@ -105,7 +105,18 @@ def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> 
     try:
         with open(src_path, "rb") as f:
             reader = PdfReader(f)
-            pages = parse_page_spec(page_spec)
+           spec_text = (page_spec or "").strip()
+            pages = parse_page_spec(spec_text)
+
+            if not pages:  # No explicit page selection → include everything
+                if spec_text:
+                    print(
+                        f"⚠️ {label}: page spec '{spec_text}' yielded no pages; "
+                        "including all pages instead."
+                    )
+                for page in reader.pages:
+                    writer.add_page(page)
+                return
             for p in pages:
                 if 0 <= p < len(reader.pages):
                     writer.add_page(reader.pages[p])
@@ -167,4 +178,6 @@ def build_pdf(
     out_buf = BytesIO()
     writer.write(out_buf)
     out_buf.seek(0)
+
     return out_buf
+  
