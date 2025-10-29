@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mint Maths Generator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📘 Mint Maths Question Generator</h1>
+    <p>Select filters (optional):</p>
+
+    <div class="filters">
+      <select id="year">
+        <option value="">Select Year</option>
+        {% for y in years %}
+          <option value="{{ y }}">{{ y }}</option>
+        {% endfor %}
+      </select>
+
+      <select id="paper">
+        <option value="">Select Paper</option>
+        {% for p in papers %}
+          <option value="{{ p }}">{{ p }}</option>
+        {% endfor %}
+      </select>
+
+      <select id="topic">
+        <option value="">Select Topic</option>
+        {% for t in topics %}
+          <option value="{{ t }}">{{ t }}</option>
+        {% endfor %}
+      </select>
+
+      <input id="num" type="number" min="1" max="30" value="5">
+      <button id="generate">🎲 Generate</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+      document.getElementById("generate").onclick = async () => {
+        const year = document.getElementById("year").value || null;
+        const paper = document.getElementById("paper").value || null;
+        const topic = document.getElementById("topic").value || null;
+        const n = document.getElementById("num").value || 5;
+
+        const res = await fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ year, paper, topic, n })
+        });
+        const data = await res.json();
+
+        const container = document.getElementById("results");
+        container.innerHTML = "";
+        if (!data.length) {
+          container.innerHTML = "<p>No questions found.</p>";
+          return;
+        }
+
+        container.innerHTML = "<h3>Your Questions:</h3><ul>" +
+          data.map(q => `<li>${q.title}</li>`).join("") +
+          "</ul><button id='pdfBtn'>📘 Generate PDF</button>";
+
+        document.getElementById("pdfBtn").onclick = async () => {
+          const res = await fetch("/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+          });
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+        };
+      };
+    </script>
+  </div>
+</body>
+</html>
