@@ -1,7 +1,11 @@
 import re
-import streamlit as st
-import random
+import os
+import time
+import uuid
 import base64
+import random
+import threading
+import streamlit as st
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -20,7 +24,6 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    # deterministic ordering before sampling
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
@@ -48,7 +51,7 @@ def short_question_label(question_id):
 
 
 # ----------------------------------------------------------------------
-# Page configuration & custom CSS (keeps the mint theme)
+# Page configuration & mint theme
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
 
@@ -118,7 +121,7 @@ num_questions = st.number_input(
 )
 
 # ----------------------------------------------------------------------
-# 1️⃣ Generate random questions → store in session
+# Generate random questions
 # ----------------------------------------------------------------------
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions…"):
@@ -147,7 +150,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# 2️⃣ Display list + PDF buttons
+# Display list and build PDF
 # ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
@@ -160,7 +163,35 @@ if st.session_state.get("selected_records"):
         unsafe_allow_html=True,
     )
 
-    # --- Build PDF ---
+    CACHE_DIR = "static/pdf_cache"
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # Background cleanup of old cached PDFs
+    # ------------------------------------------------------------------
+    def cleanup_old_pdfs(cache_dir=CACHE_DIR, max_age_minutes=10):
+        now = time.time()
+        cutoff = now - (max_age_minutes * 60)
+        deleted = 0
+        for fname in os.listdir(cache_dir):
+            if not fname.endswith(".pdf"):
+                continue
+            fpath = os.path.join(cache_dir, fname)
+            try:
+                if os.path.isfile(fpath) and os.path.getmtime(fpath) < cutoff:
+                    os.remove(fpath)
+                    deleted += 1
+            except Exception as e:
+                print(f"⚠️ Cleanup error for {fname}: {e}")
+        if deleted:
+            print(f"🧹 Cleaned up {deleted} old cached PDFs.")
+
+    # Run cleanup asynchronously
+    threading.Thread(target=cleanup_old_pdfs, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # Build the PDF
+    # ------------------------------------------------------------------
     with st.spinner("Building PDF…"):
         pdf_bytes = build_pdf(
             st.session_state.selected_records,
@@ -168,11 +199,17 @@ if st.session_state.get("selected_records"):
             include_solutions=True,
         )
 
-    pdf_data = pdf_bytes.getvalue()
-    pdf_b64 = base64.b64encode(pdf_data).decode()
-    pdf_url = f"data:application/pdf;base64,{pdf_b64}"
+    # Save the new PDF file
+    unique_name = f"mintmaths_{uuid.uuid4().hex[:8]}.pdf"
+    pdf_path = os.path.join(CACHE_DIR, unique_name)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes.getvalue())
 
-    # --- Open in New Tab Button ---
+    pdf_url = f"/static/pdf_cache/{unique_name}"
+
+    # ------------------------------------------------------------------
+    # Open in New Tab Button
+    # ------------------------------------------------------------------
     st.markdown(
         f"""
         <div style='text-align:center; margin-top:20px;'>
@@ -187,15 +224,21 @@ if st.session_state.get("selected_records"):
         unsafe_allow_html=True,
     )
 
-    # --- Download button (hidden on mobile) ---
+    # ------------------------------------------------------------------
+    # Download Button (hidden on mobile)
+    # ------------------------------------------------------------------
     st.markdown(
         """
         <script>
             const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-            if (isMobile) {{
-                const downloadBtn = window.parent.document.querySelector('button[kind="secondary"]');
-                if (downloadBtn) downloadBtn.style.display = "none";
-            }}
+            if (isMobile) {
+                const btns = window.parent.document.querySelectorAll('button');
+                btns.forEach(btn => {
+                    if (btn.innerText.includes("Download Mint Maths PDF")) {
+                        btn.style.display = "none";
+                    }
+                });
+            }
         </script>
         """,
         unsafe_allow_html=True,
@@ -203,7 +246,7 @@ if st.session_state.get("selected_records"):
 
     st.download_button(
         "⬇️ Download Mint Maths PDF",
-        data=pdf_data,
+        data=pdf_bytes.getvalue(),
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
         use_container_width=True,
