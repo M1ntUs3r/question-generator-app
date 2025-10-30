@@ -98,6 +98,9 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
 # ----------------------------------------------------------------------
 # Add pages from a source PDF (streaming-safe)
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Add pages from a source PDF (streaming-safe)
+# ----------------------------------------------------------------------
 def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str):
     """Append selected pages from `src_path` to `writer`."""
     if not src_path or not os.path.exists(src_path):
@@ -133,12 +136,13 @@ def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str):
 # Build the final PDF (streaming + compression-safe)
 # ----------------------------------------------------------------------
 def build_pdf(records: list[dict], cover_titles: list[str] | None = None, include_solutions: bool = True) -> BytesIO:
+    """Combine selected question/solution PDFs with a styled cover page."""
     writer = PdfWriter()
 
     if not cover_titles:
         cover_titles = [rec["title"] for rec in records]
 
-    # Cover
+    # 1️⃣ Cover page
     try:
         cover_reader = make_cover_page(cover_titles)
         for page in cover_reader.pages:
@@ -146,23 +150,22 @@ def build_pdf(records: list[dict], cover_titles: list[str] | None = None, includ
     except Exception as e:
         print(f"⚠️ Cover page error: {e}")
 
-    # Questions
+    # 2️⃣ Question PDFs
     for rec in records:
         _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), f"Question {rec.get('question_id')}")
 
-    # Solutions
+    # 3️⃣ Solution PDFs
     if include_solutions:
         for rec in records:
             _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), f"Solution {rec.get('question_id')}")
 
-    # Write to disk incrementally
+    # 4️⃣ Write output to memory buffer
     out_buf = BytesIO()
     writer.write(out_buf)
     out_buf.seek(0)
 
-    # Optional: compress final PDF (to save space on mobile)
+    # 5️⃣ Optional compression for smaller mobile downloads
     try:
-        from pypdf import PdfReader, PdfWriter
         tmp_reader = PdfReader(out_buf)
         compressed_writer = PdfWriter()
         for page in tmp_reader.pages:
