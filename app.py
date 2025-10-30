@@ -152,68 +152,72 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 # ----------------------------------------------------------------------
 # 2️⃣ Show list + PDF builder
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# 2️⃣ Show the list (read-only) whenever we have records
+# ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
     for i, rec in enumerate(st.session_state.selected_records, 1):
         st.markdown(f"**{rec['title']}**")
 
-    st.markdown("---")
+    # ------------------------------------------------------------------
+    # 3️⃣ PDF download / open section
+    # ------------------------------------------------------------------
+    st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 View or Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
-    # Build the cover page titles
+    # Collect all titles for the cover
     cover_titles = [rec["title"] for rec in st.session_state.selected_records]
 
-    # Build the combined PDF
-    with st.spinner("Building PDF…"):
+    # Generate the PDF in memory
+    with st.spinner("🔍 Building your Mint Maths PDF..."):
         pdf_bytes = build_pdf(
             st.session_state.selected_records,
             cover_titles=cover_titles,
             include_solutions=True,
         )
 
-    # ✅ Save the generated PDF to a real static path
-    tmp_dir = os.path.join("static", "tmp")
-    os.makedirs(tmp_dir, exist_ok=True)
-    tmp_path = os.path.join(tmp_dir, "generated.pdf")
-
-    # Write to file correctly (BytesIO → bytes)
+    # Save to a temporary file for both viewing and download
+    tmp_path = "mintmaths_questions.pdf"
     with open(tmp_path, "wb") as f:
         f.write(pdf_bytes.getvalue())
 
-    # ✅ Create a relative URL for the saved PDF
-    pdf_url = f"/{tmp_path}"
+    # Read bytes for Streamlit
+    with open(tmp_path, "rb") as f:
+        pdf_data = f.read()
 
-    # 🎯 Styled “Open in New Tab” button (no forced download)
-    open_pdf_html = f"""
-    <div style="text-align:center; margin-top:1.5em;">
-        <a href="{pdf_url}" target="_blank"
-           style="
-               background-color:{mint_main};
-               color:{mint_text};
-               padding:10px 20px;
-               border-radius:8px;
-               text-decoration:none;
-               font-weight:600;
-               display:inline-block;
-               transition:all 0.2s ease-in-out;
-           "
-           onmouseover="this.style.backgroundColor='#95dec2'"
-           onmouseout="this.style.backgroundColor='{mint_main}'">
-           📖 Open PDF in New Tab
-        </a>
-    </div>
-    """
-    st.markdown(open_pdf_html, unsafe_allow_html=True)
-
-    # Optional: old download button for fallback (if needed)
+    # ✅ Option 1 — Download directly
     st.download_button(
-        label="⬇️ Download Mint Maths PDF",
-        data=pdf_bytes,
+        label="⬇️ Download PDF",
+        data=pdf_data,
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
         use_container_width=True,
     )
 
+    # ✅ Option 2 — Open PDF in a new tab (for mobile/desktop users)
+    import base64
+    pdf_b64 = base64.b64encode(pdf_data).decode()
+    pdf_url = f"data:application/pdf;base64,{pdf_b64}"
+
+    st.markdown(
+        f"""
+        <div style="text-align:center; margin-top:15px;">
+            <a href="{pdf_url}" target="_blank" style="
+                background-color:{mint_main};
+                color:{mint_text};
+                padding:10px 18px;
+                border-radius:8px;
+                font-weight:600;
+                text-decoration:none;
+                transition:0.3s ease-in-out;">
+                📖 Open PDF in New Tab
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+ 
