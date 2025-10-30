@@ -1,30 +1,21 @@
+# modules/pdf_builder.py
 from io import BytesIO
 from datetime import datetime
-import os
 import re
+import os
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
+
 from pypdf import PdfReader, PdfWriter
 
 
 # ----------------------------------------------------------------------
-# Cache directory helper (replaces modules.paths)
-# ----------------------------------------------------------------------
-def get_cache_dir():
-    """Return the absolute path to the PDF cache directory (creates it if missing)."""
-    cache_dir = os.path.join(os.path.dirname(__file__), "../static/pdf_cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    return os.path.abspath(cache_dir)
-
-
-CACHE_DIR = get_cache_dir()
-
-
-# ----------------------------------------------------------------------
-# Parse page specifications like "2-4,6"
+# Helper: parse page specifications like "2-4,6"
 # ----------------------------------------------------------------------
 def parse_page_spec(spec: str) -> list[int]:
+    """Convert a string like '2-4,6' into a zero-based list of pages [1,2,3,5]."""
     if not spec:
         return []
     pages = set()
@@ -32,30 +23,28 @@ def parse_page_spec(spec: str) -> list[int]:
         if not part:
             continue
         if "-" in part:
-            a, b = part.split("-", 1)
             try:
-                start, end = int(a), int(b)
-                if start < 1 or end < 1:
-                    continue
+                start, end = [int(x) for x in part.split("-", 1)]
                 for p in range(start, end + 1):
-                    pages.add(p - 1)  # zero-based
+                    if p > 0:
+                        pages.add(p - 1)
             except ValueError:
                 continue
         else:
             try:
                 p = int(part)
-                if p < 1:
-                    continue
-                pages.add(p - 1)
+                if p > 0:
+                    pages.add(p - 1)
             except ValueError:
                 continue
     return sorted(pages)
 
 
 # ----------------------------------------------------------------------
-# Create a cover page listing included questions
+# Create the cover page
 # ----------------------------------------------------------------------
 def make_cover_page(question_titles: list[str]) -> PdfReader:
+    """Generate a cover page listing all question titles."""
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
@@ -67,7 +56,7 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
     c.setFillColor(mint_dark)
     c.rect(0, h - 80, w, 80, stroke=0, fill=1)
 
-    # Title
+    # Title text
     c.setFont("Helvetica-Bold", 22)
     c.setFillColor(colors.white)
     c.drawCentredString(w / 2, h - 50, "Mint Maths Practice Set")
@@ -83,14 +72,14 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
     c.setFillColor(mint_dark)
     c.drawString(40, h - 130, "Included Questions:")
 
-    # List items
+    # Question list
     c.setFont("Helvetica", 12)
     c.setFillColor(colors.black)
     y = h - 155
     for i, title in enumerate(question_titles, start=1):
         c.drawString(60, y, f"{i}. {title}")
         y -= 18
-        if y < 60:
+        if y < 60:  # start a new page if needed
             c.showPage()
             c.setFillColor(mint_dark)
             c.rect(0, h - 80, w, 80, stroke=0, fill=1)
@@ -104,83 +93,66 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
 
 
 # ----------------------------------------------------------------------
-# Safely add pages from another PDF
+# Add pages from a source PDF
 # ----------------------------------------------------------------------
-def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str) -> None:
-    """Append pages from src_path described by page_spec. Logs and skips errors safely."""
-    if not src_path:
-        print(f"⚠️ {label}: no source path provided.")
-        return
-
-    full_path = src_path
-    if not os.path.isabs(full_path):
-        # handle relative path like static/pdf_cache/file.pdf
-        full_path = os.path.join(os.path.dirname(__file__), "..", src_path)
-        full_path = os.path.abspath(full_path)
-
-    if not os.path.exists(full_path):
-        print(f"⚠️ {label}: file not found → {full_path}")
+def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str):
+    """Append selected pages from `src_path` to `writer`."""
+    if not src_path or not os.path.exists(src_path):
+        print(f"⚠️ {label}: file not found → {src_path}")
         return
 
     try:
-        with open(full_path, "rb") as f:
+        with open(src_path, "rb") as f:
             reader = PdfReader(f)
-            spec_text = (page_spec or "").strip()
-            pages = parse_page_spec(spec_text)
+            pages = parse_page_spec(page_spec)
 
+            # If no valid page spec → include all pages
             if not pages:
-                # include all pages if no valid spec
-                for page in reader.pages:
-                    writer.add_page(page)
-                return
+                pages = range(len(reader.pages))
 
             for p in pages:
                 if 0 <= p < len(reader.pages):
                     writer.add_page(reader.pages[p])
                 else:
-                    print(f"⚠️ {label}: page {p + 1} out of range in {src_path}")
+                    print(f"⚠️ {label}: page {p+1} out of range in {src_path}")
 
-    except Exception as exc:
-        print(f"⚠️ {label}: could not process {full_path} → {exc}")
+    except Exception as e:
+        print(f"⚠️ {label}: failed to read {src_path} → {e}")
 
 
 # ----------------------------------------------------------------------
-# Build the combined PDF
+# Build the final PDF
 # ----------------------------------------------------------------------
-def build_pdf(records: list[dict], cover_titles=None, include_solutions=True) -> BytesIO:
+def build_pdf(records: list[dict], cover_titles: list[str] | None = None, include_solutions: bool = True) -> BytesIO:
     """
-    Combine question + solution PDFs into one output.
-    records: list of dicts, each with:
-        question_id, title, pdf_question, q_pages, pdf_solution, s_pages
+    Build one PDF that contains:
+      1. A cover page listing questions
+      2. The question pages (in order)
+      3. The solution pages (in order)
     """
     writer = PdfWriter()
 
     # 1️⃣ Cover page
-    if cover_titles is None:
+    if not cover_titles:
         cover_titles = [rec["title"] for rec in records]
-
     try:
         cover_reader = make_cover_page(cover_titles)
         for page in cover_reader.pages:
             writer.add_page(page)
-    except Exception as exc:
-        print(f"⚠️ Failed to create cover page: {exc}")
+    except Exception as e:
+        print(f"⚠️ Cover page error: {e}")
 
     # 2️⃣ Questions
     for rec in records:
         _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), "Question")
 
-    # 3️⃣ Solutions
+    # 3️⃣ Solutions (optional)
     if include_solutions:
         for rec in records:
             _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), "Solution")
 
-    # 4️⃣ Output buffer
+    # 4️⃣ Output
     out_buf = BytesIO()
-    try:
-        writer.write(out_buf)
-        out_buf.seek(0)
-    except Exception as exc:
-        print(f"⚠️ Failed to write final PDF: {exc}")
-
+    writer.write(out_buf)
+    out_buf.seek(0)
     return out_buf
