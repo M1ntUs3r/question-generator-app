@@ -1,17 +1,14 @@
 import re
 import os
-import time
-import uuid
-import base64
 import random
-import threading
+import base64
 import streamlit as st
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
 
 # ----------------------------------------------------------------------
-# Helper: pick random questions (unchanged logic)
+# Helper: pick random questions
 # ----------------------------------------------------------------------
 def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
@@ -68,10 +65,6 @@ st.markdown(
                            border-radius:8px!important;padding:0.6em 1.2em!important;
                            font-weight:500!important;transition:0.3s;}}
         .stButton button:hover {{background-color:#2b7a6d!important;transform:scale(1.03);}}
-        .stDownloadButton button {{background-color:{mint_main}!important;color:{mint_text}!important;
-                                   border-radius:8px!important;padding:0.6em 1.2em!important;
-                                   font-weight:600!important;transition:0.3s;}}
-        .stDownloadButton button:hover {{background-color:#95dec2!important;transform:scale(1.03);}}
         h1,h2,h3 {{text-align:center;color:{mint_dark};}}
         .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
         .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
@@ -151,99 +144,47 @@ if st.button("🎲 Generate Questions", use_container_width=True):
                 }
             )
         st.session_state.selected_records = records
+        st.session_state.show_pdf = False  # reset viewer
         st.success(f"✅ Generated {len(records)} question(s).")
 
 
 # ----------------------------------------------------------------------
-# Display list and build PDF
+# Display list and collapsible PDF viewer
 # ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
-    for i, rec in enumerate(st.session_state.selected_records, 1):
+    for rec in st.session_state.selected_records:
         st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 View or Download Your Question Set</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 View Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
-    CACHE_DIR = "static/pdf_cache"
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    # Toggle PDF viewer
+    if st.button(
+        "📘 View / Hide PDF", 
+        use_container_width=True
+    ):
+        st.session_state.show_pdf = not st.session_state.get("show_pdf", False)
 
-    # ------------------------------------------------------------------
-    # Background cleanup of old cached PDFs
-    # ------------------------------------------------------------------
-    def cleanup_old_pdfs(cache_dir=CACHE_DIR, max_age_minutes=10):
-        now = time.time()
-        cutoff = now - (max_age_minutes * 60)
-        deleted = 0
-        for fname in os.listdir(cache_dir):
-            if not fname.endswith(".pdf"):
-                continue
-            fpath = os.path.join(cache_dir, fname)
-            try:
-                if os.path.isfile(fpath) and os.path.getmtime(fpath) < cutoff:
-                    os.remove(fpath)
-                    deleted += 1
-            except Exception as e:
-                print(f"⚠️ Cleanup error for {fname}: {e}")
-        if deleted:
-            print(f"🧹 Cleaned up {deleted} old cached PDFs.")
+    # Show PDF only if toggled
+    if st.session_state.get("show_pdf", False):
+        with st.spinner("Building PDF…"):
+            pdf_bytes = build_pdf(
+                st.session_state.selected_records,
+                cover_titles=[rec["title"] for rec in st.session_state.selected_records],
+                include_solutions=True,
+            )
 
-    threading.Thread(target=cleanup_old_pdfs, daemon=True).start()
-
-    # ------------------------------------------------------------------
-    # Build the PDF
-    # ------------------------------------------------------------------
-    with st.spinner("Building PDF…"):
-        pdf_bytes = build_pdf(
-            st.session_state.selected_records,
-            cover_titles=[rec["title"] for rec in st.session_state.selected_records],
-            include_solutions=True,
-        )
-
-    # ------------------------------------------------------------------
-    # Open in new tab (base64 data link)
-    # ------------------------------------------------------------------
-    b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
-    pdf_html = f"""
-        <div style='text-align:center; margin-top:20px;'>
-            <a href="data:application/pdf;base64,{b64_pdf}" target="_blank"
-               style="background-color:{mint_main}; color:{mint_text};
-                      padding:10px 18px; text-decoration:none;
-                      border-radius:8px; font-weight:600;">
-                📖 Open PDF in New Tab
-            </a>
-        </div>
-    """
-    st.markdown(pdf_html, unsafe_allow_html=True)
-
-    # ------------------------------------------------------------------
-    # Download button (hidden on mobile)
-    # ------------------------------------------------------------------
-    st.markdown(
+        b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
+        pdf_display = f"""
+            <div style='text-align:center; margin-top:20px;'>
+                <iframe src="data:application/pdf;base64,{b64_pdf}" 
+                        width="100%" height="800px" 
+                        style="border:1px solid {mint_dark}; border-radius:12px;">
+                </iframe>
+            </div>
         """
-        <script>
-            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-            if (isMobile) {
-                const btns = window.parent.document.querySelectorAll('button');
-                btns.forEach(btn => {
-                    if (btn.innerText.includes("Download Mint Maths PDF")) {
-                        btn.style.display = "none";
-                    }
-                });
-            }
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.download_button(
-        "⬇️ Download Mint Maths PDF",
-        data=pdf_bytes.getvalue(),
-        file_name="mintmaths_questions.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-
+        st.markdown(pdf_display, unsafe_allow_html=True)
