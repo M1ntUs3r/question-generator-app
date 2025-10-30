@@ -68,6 +68,16 @@ st.markdown(
         h1,h2,h3 {{text-align:center;color:{mint_dark};}}
         .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
         .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
+        @media (max-width: 768px) {{
+            iframe.pdf-viewer {{
+                height: 500px !important;
+            }}
+        }}
+        @media (min-width: 769px) {{
+            iframe.pdf-viewer {{
+                height: 850px !important;
+            }}
+        }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -163,10 +173,7 @@ if st.session_state.get("selected_records"):
     )
 
     # Toggle PDF viewer
-    if st.button(
-        "📘 View / Hide PDF", 
-        use_container_width=True
-    ):
+    if st.button("📘 View / Hide PDF", use_container_width=True):
         st.session_state.show_pdf = not st.session_state.get("show_pdf", False)
 
     # Show PDF only if toggled
@@ -179,10 +186,12 @@ if st.session_state.get("selected_records"):
             )
 
         b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
+
         pdf_display = f"""
             <div style='text-align:center; margin-top:20px;'>
-                <iframe src="data:application/pdf;base64,{b64_pdf}" 
-                        width="100%" height="800px" 
+                <iframe class="pdf-viewer"
+                        src="data:application/pdf;base64,{b64_pdf}" 
+                        width="100%" 
                         style="border:1px solid {mint_dark}; border-radius:12px;">
                 </iframe>
             </div>
