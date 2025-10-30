@@ -9,6 +9,7 @@ import streamlit as st
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
+
 # ----------------------------------------------------------------------
 # Helper: pick random questions (unchanged logic)
 # ----------------------------------------------------------------------
@@ -79,6 +80,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ----------------------------------------------------------------------
 # Header
 # ----------------------------------------------------------------------
@@ -92,6 +94,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
+
 
 # ----------------------------------------------------------------------
 # Filters
@@ -119,6 +122,7 @@ num_questions = st.number_input(
     value=5,
     step=1,
 )
+
 
 # ----------------------------------------------------------------------
 # Generate random questions
@@ -148,6 +152,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
             )
         st.session_state.selected_records = records
         st.success(f"✅ Generated {len(records)} question(s).")
+
 
 # ----------------------------------------------------------------------
 # Display list and build PDF
@@ -186,7 +191,6 @@ if st.session_state.get("selected_records"):
         if deleted:
             print(f"🧹 Cleaned up {deleted} old cached PDFs.")
 
-    # Run cleanup asynchronously
     threading.Thread(target=cleanup_old_pdfs, daemon=True).start()
 
     # ------------------------------------------------------------------
@@ -199,33 +203,24 @@ if st.session_state.get("selected_records"):
             include_solutions=True,
         )
 
-    # Save the new PDF file
-    unique_name = f"mintmaths_{uuid.uuid4().hex[:8]}.pdf"
-    pdf_path = os.path.join(CACHE_DIR, unique_name)
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_bytes.getvalue())
-
-    pdf_url = f"/static/pdf_cache/{unique_name}"
-
     # ------------------------------------------------------------------
-    # Open in New Tab Button
+    # Open in new tab (base64 data link)
     # ------------------------------------------------------------------
-    st.markdown(
-        f"""
+    b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
+    pdf_html = f"""
         <div style='text-align:center; margin-top:20px;'>
-            <a href="{pdf_url}" target="_blank" rel="noopener noreferrer"
+            <a href="data:application/pdf;base64,{b64_pdf}" target="_blank"
                style="background-color:{mint_main}; color:{mint_text};
                       padding:10px 18px; text-decoration:none;
                       border-radius:8px; font-weight:600;">
                 📖 Open PDF in New Tab
             </a>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+    st.markdown(pdf_html, unsafe_allow_html=True)
 
     # ------------------------------------------------------------------
-    # Download Button (hidden on mobile)
+    # Download button (hidden on mobile)
     # ------------------------------------------------------------------
     st.markdown(
         """
@@ -251,3 +246,4 @@ if st.session_state.get("selected_records"):
         mime="application/pdf",
         use_container_width=True,
     )
+
