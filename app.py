@@ -113,7 +113,7 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 National 5 Question Generator</h1>
+    <h1>📘 National 5 Maths Question Generator</h1>
     <p style='text-align:center;color:{mint_text};'>
         Generate random practice questions or practice specific topics with the filters below :)
     </p>
