@@ -184,57 +184,47 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 
 # ----------------------------------------------------------------------
 # Display list and collapsible PDF viewer
-# ----------------------------------------------------------------------
-if st.session_state.get("selected_records"):
-    st.subheader("📝 Your Question List:")
-    for rec in st.session_state.selected_records:
-        st.markdown(f"**{rec['title']}**")
+# -----if st.session_state.get("show_pdf", False):
+    with st.spinner("Building your full PDF..."):
+        pdf_bytes = build_pdf(
+            st.session_state.selected_records,
+            cover_titles=[r["title"] for r in st.session_state.selected_records],
+            include_solutions=True,
+        )
 
-    st.markdown("---")
-    st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 View Your Question Set</h3>",
-        unsafe_allow_html=True,
-    )
+    b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
 
-    # Toggle PDF viewer
-    if st.button("📘 View / Hide PDF", use_container_width=True):
-        st.session_state.show_pdf = not st.session_state.get("show_pdf", False)
-
-    # Show PDF only if toggled
-    if st.session_state.get("show_pdf", False):
-        with st.spinner("Building PDF…"):
-            pdf_bytes = build_pdf(
-                st.session_state.selected_records,
-                cover_titles=[rec["title"] for rec in st.session_state.selected_records],
-                include_solutions=True,
-            )
-
-        b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
-
-        # Embedded PDF + print/save controls
-        pdf_display = f"""
-            <div style='text-align:center; margin-top:20px;'>
-                <iframe class="pdf-viewer"
-                        src="data:application/pdf;base64,{b64_pdf}" 
-                        width="100%" 
-                        style="border:1px solid {mint_dark}; border-radius:12px;">
-                </iframe>
-                <br>
-                <button onclick="var iframe = document.querySelector('.pdf-viewer'); 
-                                 var win = window.open(iframe.src);
-                                 win.onload = () => win.print();"
-                        style="margin-top:10px; background-color:{mint_main};
-                               color:{mint_text}; border:none; border-radius:8px;
-                               padding:10px 20px; font-weight:600; cursor:pointer;">
-                    🖨️ Print PDF
-                </button>
-                <a href="data:application/pdf;base64,{b64_pdf}" 
-                   download="MintMaths_PracticeSet.pdf"
-                   style="margin-left:10px; background-color:{mint_dark};
-                          color:white; border:none; border-radius:8px;
-                          padding:10px 20px; text-decoration:none; font-weight:600;">
-                    💾 Save PDF
-                </a>
-            </div>
-        """
-        st.markdown(pdf_display, unsafe_allow_html=True)
+    # Embedded PDF + full control bar
+    pdf_display = f"""
+        <div style='text-align:center; margin-top:20px;'>
+            <iframe class="pdf-viewer"
+                    src="data:application/pdf;base64,{b64_pdf}"
+                    width="100%"
+                    style="border:1px solid {mint_dark}; border-radius:12px;">
+            </iframe>
+            <br>
+            <button onclick="var iframe = document.querySelector('.pdf-viewer');
+                             var win = window.open(iframe.src);
+                             win.onload = () => win.print();"
+                    style="margin-top:10px; background-color:{mint_main};
+                           color:{mint_text}; border:none; border-radius:8px;
+                           padding:10px 20px; font-weight:600; cursor:pointer;">
+                🖨️ Print PDF
+            </button>
+            <a href="data:application/pdf;base64,{b64_pdf}"
+               download="MintMaths_PracticeSet.pdf"
+               style="margin-left:10px; background-color:{mint_dark};
+                      color:white; border:none; border-radius:8px;
+                      padding:10px 20px; text-decoration:none; font-weight:600;">
+                💾 Save PDF
+            </a>
+            <a href="data:application/pdf;base64,{b64_pdf}" target="_blank"
+               style="margin-left:10px; background-color:#57b894;
+                      color:white; border:none; border-radius:8px;
+                      padding:10px 20px; text-decoration:none; font-weight:600;">
+                ⬇️ Download PDF
+            </a>
+        </div>
+    """
+    st.markdown(pdf_display, unsafe_allow_html=True)
+-----------------------------------------------------------------
