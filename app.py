@@ -51,7 +51,7 @@ def short_question_label(question_id):
 # ----------------------------------------------------------------------
 # Page configuration & mint theme
 # ----------------------------------------------------------------------
-st.set_page_config(page_title="Mint Maths Generator", layout="centered")
+st.set_page_config(page_title="National 5 Question Generator", layout="centered")
 
 mint_main = "#A8E6CF"
 mint_dark = "#379683"
@@ -115,7 +115,7 @@ st.markdown(
     f"""
     <h1>📘 Mint Maths Question Generator</h1>
     <p style='text-align:center;color:{mint_text};'>
-        Generate random practice questions with optional filters below
+        Generate random practice questions or practice specific topics with the filters below :)
     </p>
     """,
     unsafe_allow_html=True,
