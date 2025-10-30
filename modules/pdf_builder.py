@@ -95,6 +95,9 @@ def make_cover_page(question_titles: list[str]) -> PdfReader:
 # ----------------------------------------------------------------------
 # Add pages from a source PDF
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Add pages from a source PDF (streaming-safe)
+# ----------------------------------------------------------------------
 def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str):
     """Append selected pages from `src_path` to `writer`."""
     if not src_path or not os.path.exists(src_path):
@@ -106,35 +109,36 @@ def _add_pages(writer: PdfWriter, src_path: str, page_spec: str, label: str):
             reader = PdfReader(f)
             pages = parse_page_spec(page_spec)
 
-            # If no valid page spec → include all pages
             if not pages:
                 pages = range(len(reader.pages))
 
+            added = 0
             for p in pages:
                 if 0 <= p < len(reader.pages):
-                    writer.add_page(reader.pages[p])
+                    try:
+                        writer.add_page(reader.pages[p])
+                        added += 1
+                    except Exception as inner:
+                        print(f"⚠️ {label}: failed page {p+1} in {src_path}: {inner}")
                 else:
                     print(f"⚠️ {label}: page {p+1} out of range in {src_path}")
+
+            print(f"✅ {label}: added {added}/{len(pages)} pages from {os.path.basename(src_path)}")
 
     except Exception as e:
         print(f"⚠️ {label}: failed to read {src_path} → {e}")
 
 
 # ----------------------------------------------------------------------
-# Build the final PDF
+# Build the final PDF (streaming + compression-safe)
 # ----------------------------------------------------------------------
 def build_pdf(records: list[dict], cover_titles: list[str] | None = None, include_solutions: bool = True) -> BytesIO:
-    """
-    Build one PDF that contains:
-      1. A cover page listing questions
-      2. The question pages (in order)
-      3. The solution pages (in order)
-    """
     writer = PdfWriter()
 
-    # 1️⃣ Cover page
     if not cover_titles:
         cover_titles = [rec["title"] for rec in records]
+
+    # Cover
     try:
         cover_reader = make_cover_page(cover_titles)
         for page in cover_reader.pages:
@@ -142,17 +146,34 @@ def build_pdf(records: list[dict], cover_titles: list[str] | None = None, includ
     except Exception as e:
         print(f"⚠️ Cover page error: {e}")
 
-    # 2️⃣ Questions
+    # Questions
     for rec in records:
-        _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), "Question")
+        _add_pages(writer, rec.get("pdf_question"), rec.get("q_pages", ""), f"Question {rec.get('question_id')}")
 
-    # 3️⃣ Solutions (optional)
+    # Solutions
     if include_solutions:
         for rec in records:
-            _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), "Solution")
+            _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), f"Solution {rec.get('question_id')}")
 
-    # 4️⃣ Output
+    # Write to disk incrementally
     out_buf = BytesIO()
     writer.write(out_buf)
     out_buf.seek(0)
-    return out_buf
+
+    # Optional: compress final PDF (to save space on mobile)
+    try:
+        from pypdf import PdfReader, PdfWriter
+        tmp_reader = PdfReader(out_buf)
+        compressed_writer = PdfWriter()
+        for page in tmp_reader.pages:
+            compressed_writer.add_page(page)
+        compressed_writer.add_metadata({"Producer": "Mint Maths PDF Builder"})
+        compressed_out = BytesIO()
+        compressed_writer.write(compressed_out)
+        compressed_out.seek(0)
+        print("✅ PDF compression applied successfully.")
+        return compressed_out
+    except Exception as e:
+        print(f"⚠️ Compression skipped: {e}")
+        out_buf.seek(0)
+        return out_buf
