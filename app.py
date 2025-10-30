@@ -60,14 +60,38 @@ mint_text = "#2F4858"
 st.markdown(
     f"""
     <style>
-        body {{background-color:#f7f9fc;color:{mint_text};font-family:'Poppins',sans-serif;}}
-        .stButton button {{background-color:{mint_dark}!important;color:white!important;
-                           border-radius:8px!important;padding:0.6em 1.2em!important;
-                           font-weight:500!important;transition:0.3s;}}
-        .stButton button:hover {{background-color:#2b7a6d!important;transform:scale(1.03);}}
-        h1,h2,h3 {{text-align:center;color:{mint_dark};}}
-        .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
-        .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
+        body {{
+            background-color:#f7f9fc;
+            color:{mint_text};
+            font-family:'Poppins',sans-serif;
+        }}
+        .stButton button {{
+            background-color:{mint_dark}!important;
+            color:white!important;
+            border-radius:8px!important;
+            padding:0.6em 1.2em!important;
+            font-weight:500!important;
+            transition:0.3s;
+        }}
+        .stButton button:hover {{
+            background-color:#2b7a6d!important;
+            transform:scale(1.03);
+        }}
+        h1,h2,h3 {{
+            text-align:center;
+            color:{mint_dark};
+        }}
+        .block-container {{
+            max-width:700px!important;
+            margin:auto;
+            padding-top:1rem;
+            padding-bottom:3rem;
+        }}
+        .stSelectbox label,.stNumberInput label {{
+            font-weight:600!important;
+            color:{mint_text}!important;
+        }}
+        /* Responsive PDF viewer */
         @media (max-width: 768px) {{
             iframe.pdf-viewer {{
                 height: 500px !important;
@@ -187,6 +211,7 @@ if st.session_state.get("selected_records"):
 
         b64_pdf = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
 
+        # Embedded PDF + print/save controls
         pdf_display = f"""
             <div style='text-align:center; margin-top:20px;'>
                 <iframe class="pdf-viewer"
@@ -194,6 +219,22 @@ if st.session_state.get("selected_records"):
                         width="100%" 
                         style="border:1px solid {mint_dark}; border-radius:12px;">
                 </iframe>
+                <br>
+                <button onclick="var iframe = document.querySelector('.pdf-viewer'); 
+                                 var win = window.open(iframe.src);
+                                 win.onload = () => win.print();"
+                        style="margin-top:10px; background-color:{mint_main};
+                               color:{mint_text}; border:none; border-radius:8px;
+                               padding:10px 20px; font-weight:600; cursor:pointer;">
+                    🖨️ Print PDF
+                </button>
+                <a href="data:application/pdf;base64,{b64_pdf}" 
+                   download="MintMaths_PracticeSet.pdf"
+                   style="margin-left:10px; background-color:{mint_dark};
+                          color:white; border:none; border-radius:8px;
+                          padding:10px 20px; text-decoration:none; font-weight:600;">
+                    💾 Save PDF
+                </a>
             </div>
         """
         st.markdown(pdf_display, unsafe_allow_html=True)
