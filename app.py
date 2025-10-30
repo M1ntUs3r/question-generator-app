@@ -163,38 +163,57 @@ if st.session_state.get("selected_records"):
         unsafe_allow_html=True,
     )
 
-    if st.button("📘 Generate PDF", use_container_width=True):
-        with st.spinner("Building your Mint Maths PDF..."):
-            pdf_bytes = build_pdf(
-                st.session_state.selected_records,
-                include_solutions=True,
-            )
+    # Build the cover page titles
+    cover_titles = [rec["title"] for rec in st.session_state.selected_records]
 
-        # ✅ Always write raw bytes (consistent with updated pdf_builder)
-        pdf_tmp_path = os.path.join(TMP_DIR, "mintmaths_questions.pdf")
-        with open(pdf_tmp_path, "wb") as f:
-            f.write(pdf_bytes)
-
-        st.download_button(
-            label="⬇️ Download Mint Maths PDF",
-            data=pdf_bytes,
-            file_name="mintmaths_questions.pdf",
-            mime="application/pdf",
-            use_container_width=True,
+    # Build the combined PDF
+    with st.spinner("Building PDF…"):
+        pdf_bytes = build_pdf(
+            st.session_state.selected_records,
+            cover_titles=cover_titles,
+            include_solutions=True,
         )
 
-        # ✅ Open directly in a new browser tab (works on mobile too)
-        st.markdown(
-            f"""
-            <div style="text-align:center;margin-top:1em;">
-                <a href="file://{quote(pdf_tmp_path)}" target="_blank"
-                   style="background-color:{mint_main};color:{mint_text};
-                          padding:0.7em 1.4em;border-radius:8px;
-                          text-decoration:none;font-weight:600;
-                          box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                    📖 Open PDF in New Tab
-                </a>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # ✅ Save the generated PDF to a real static path
+    tmp_dir = os.path.join("static", "tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_path = os.path.join(tmp_dir, "generated.pdf")
+
+    # Write to file correctly (BytesIO → bytes)
+    with open(tmp_path, "wb") as f:
+        f.write(pdf_bytes.getvalue())
+
+    # ✅ Create a relative URL for the saved PDF
+    pdf_url = f"/{tmp_path}"
+
+    # 🎯 Styled “Open in New Tab” button (no forced download)
+    open_pdf_html = f"""
+    <div style="text-align:center; margin-top:1.5em;">
+        <a href="{pdf_url}" target="_blank"
+           style="
+               background-color:{mint_main};
+               color:{mint_text};
+               padding:10px 20px;
+               border-radius:8px;
+               text-decoration:none;
+               font-weight:600;
+               display:inline-block;
+               transition:all 0.2s ease-in-out;
+           "
+           onmouseover="this.style.backgroundColor='#95dec2'"
+           onmouseout="this.style.backgroundColor='{mint_main}'">
+           📖 Open PDF in New Tab
+        </a>
+    </div>
+    """
+    st.markdown(open_pdf_html, unsafe_allow_html=True)
+
+    # Optional: old download button for fallback (if needed)
+    st.download_button(
+        label="⬇️ Download Mint Maths PDF",
+        data=pdf_bytes,
+        file_name="mintmaths_questions.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+
