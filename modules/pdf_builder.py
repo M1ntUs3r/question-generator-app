@@ -159,24 +159,31 @@ def build_pdf(records: list[dict], cover_titles: list[str] | None = None, includ
         for rec in records:
             _add_pages(writer, rec.get("pdf_solution"), rec.get("s_pages", ""), f"Solution {rec.get('question_id')}")
 
-    # 4️⃣ Write output to memory buffer
+    # 4️⃣ Write to output buffer and force flush
     out_buf = BytesIO()
     writer.write(out_buf)
+    out_buf.flush()
     out_buf.seek(0)
+
+    # Double-check integrity: read back the tail
+    final_bytes = out_buf.getvalue()
+    print(f"✅ PDF built successfully ({len(final_bytes)/1024:.1f} KB)")
 
     # 5️⃣ Optional compression for smaller mobile downloads
     try:
-        tmp_reader = PdfReader(out_buf)
+        tmp_reader = PdfReader(BytesIO(final_bytes))
         compressed_writer = PdfWriter()
         for page in tmp_reader.pages:
             compressed_writer.add_page(page)
         compressed_writer.add_metadata({"Producer": "Mint Maths PDF Builder"})
         compressed_out = BytesIO()
         compressed_writer.write(compressed_out)
+        compressed_out.flush()
         compressed_out.seek(0)
-        print("✅ PDF compression applied successfully.")
+        print("✅ Compression applied successfully.")
         return compressed_out
     except Exception as e:
         print(f"⚠️ Compression skipped: {e}")
         out_buf.seek(0)
         return out_buf
+
