@@ -1,22 +1,12 @@
 import re
 import streamlit as st
 import random
-import tempfile, shutil, atexit, os
-from urllib.parse import quote
-
+import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
-
 # ----------------------------------------------------------------------
-# 🔧 Temporary file setup (safe for mobile & large PDFs)
-# ----------------------------------------------------------------------
-TMP_DIR = tempfile.mkdtemp(prefix="mintmaths_")
-atexit.register(lambda: shutil.rmtree(TMP_DIR, ignore_errors=True))
-
-
-# ----------------------------------------------------------------------
-# Helper functions
+# Helper: pick random questions (unchanged logic)
 # ----------------------------------------------------------------------
 def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
@@ -30,6 +20,7 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
+    # deterministic ordering before sampling
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
@@ -37,7 +28,7 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
 
 
 def short_question_label(question_id):
-    """Return a concise label like Q7 from IDs such as 2014_P1_Q07."""
+    """Return a concise label like 'Q7' from IDs such as '2014_P1_Q07'."""
     if not question_id:
         return ""
     if not isinstance(question_id, str):
@@ -47,14 +38,20 @@ def short_question_label(question_id):
     if match:
         return f"Q{match.group(1)}"
 
-    last_chunk = question_id.split("_")[-1].strip().upper()
-    return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
+    last_chunk = question_id.split("_")[-1].strip()
+    if not last_chunk:
+        return question_id
+    last_chunk = last_chunk.upper()
+    if last_chunk.startswith("Q"):
+        return last_chunk
+    return f"Q{last_chunk}"
 
 
 # ----------------------------------------------------------------------
-# Streamlit setup (Mint Maths theme)
+# Page configuration & custom CSS (keeps the mint theme)
 # ----------------------------------------------------------------------
 st.set_page_config(page_title="Mint Maths Generator", layout="centered")
+
 mint_main = "#A8E6CF"
 mint_dark = "#379683"
 mint_text = "#2F4858"
@@ -121,7 +118,7 @@ num_questions = st.number_input(
 )
 
 # ----------------------------------------------------------------------
-# 1️⃣ Generate random questions
+# 1️⃣ Generate random questions → store in session
 # ----------------------------------------------------------------------
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions…"):
@@ -150,74 +147,64 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# 2️⃣ Show list + PDF builder
-# ----------------------------------------------------------------------
-# ----------------------------------------------------------------------
-# 2️⃣ Show the list (read-only) whenever we have records
+# 2️⃣ Display list + PDF buttons
 # ----------------------------------------------------------------------
 if st.session_state.get("selected_records"):
     st.subheader("📝 Your Question List:")
     for i, rec in enumerate(st.session_state.selected_records, 1):
         st.markdown(f"**{rec['title']}**")
 
-    # ------------------------------------------------------------------
-    # 3️⃣ PDF download / open section
-    # ------------------------------------------------------------------
-    st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
+    st.markdown("---")
     st.markdown(
         f"<h3 style='text-align:center;color:{mint_dark};'>📘 View or Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
-    # Collect all titles for the cover
-    cover_titles = [rec["title"] for rec in st.session_state.selected_records]
-
-    # Generate the PDF in memory
-    with st.spinner("🔍 Building your Mint Maths PDF..."):
+    # --- Build PDF ---
+    with st.spinner("Building PDF…"):
         pdf_bytes = build_pdf(
             st.session_state.selected_records,
-            cover_titles=cover_titles,
+            cover_titles=[rec["title"] for rec in st.session_state.selected_records],
             include_solutions=True,
         )
 
-    # Save to a temporary file for both viewing and download
-    tmp_path = "mintmaths_questions.pdf"
-    with open(tmp_path, "wb") as f:
-        f.write(pdf_bytes.getvalue())
-
-    # Read bytes for Streamlit
-    with open(tmp_path, "rb") as f:
-        pdf_data = f.read()
-
-    # ✅ Option 1 — Download directly
-    st.download_button(
-        label="⬇️ Download PDF",
-        data=pdf_data,
-        file_name="mintmaths_questions.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-
-    # ✅ Option 2 — Open PDF in a new tab (for mobile/desktop users)
-    import base64
+    pdf_data = pdf_bytes.getvalue()
     pdf_b64 = base64.b64encode(pdf_data).decode()
     pdf_url = f"data:application/pdf;base64,{pdf_b64}"
 
+    # --- Open in New Tab Button ---
     st.markdown(
         f"""
-        <div style="text-align:center; margin-top:15px;">
-            <a href="{pdf_url}" target="_blank" style="
-                background-color:{mint_main};
-                color:{mint_text};
-                padding:10px 18px;
-                border-radius:8px;
-                font-weight:600;
-                text-decoration:none;
-                transition:0.3s ease-in-out;">
+        <div style='text-align:center; margin-top:20px;'>
+            <a href="{pdf_url}" target="_blank" rel="noopener noreferrer"
+               style="background-color:{mint_main}; color:{mint_text};
+                      padding:10px 18px; text-decoration:none;
+                      border-radius:8px; font-weight:600;">
                 📖 Open PDF in New Tab
             </a>
         </div>
         """,
         unsafe_allow_html=True,
     )
- 
+
+    # --- Download button (hidden on mobile) ---
+    st.markdown(
+        """
+        <script>
+            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+            if (isMobile) {{
+                const downloadBtn = window.parent.document.querySelector('button[kind="secondary"]');
+                if (downloadBtn) downloadBtn.style.display = "none";
+            }}
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.download_button(
+        "⬇️ Download Mint Maths PDF",
+        data=pdf_data,
+        file_name="mintmaths_questions.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
