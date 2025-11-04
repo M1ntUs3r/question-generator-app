@@ -1,7 +1,8 @@
 import re
-import base64
 import streamlit as st
 import random
+import base64
+from streamlit import components
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -20,11 +21,11 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
+    # deterministic ordering before and after sampling
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     return selection
-
 
 def short_question_label(question_id):
     """Return a concise label like Q7 from 2014_P1_Q07."""
@@ -37,7 +38,6 @@ def short_question_label(question_id):
         return f"Q{match.group(1)}"
     last_chunk = question_id.split("_")[-1].strip().upper()
     return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
-
 
 # ----------------------------------------------------------------------
 # Page configuration & CSS
@@ -55,10 +55,6 @@ st.markdown(
                            border-radius:8px!important;padding:0.6em 1.2em!important;
                            font-weight:500!important;transition:0.3s;}}
         .stButton button:hover {{background-color:#2b7a6d!important;transform:scale(1.03);}}
-        .stDownloadButton button {{background-color:{mint_main}!important;color:{mint_text}!important;
-                                   border-radius:8px!important;padding:0.6em 1.2em!important;
-                                   font-weight:600!important;transition:0.3s;}}
-        .stDownloadButton button:hover {{background-color:#95dec2!important;transform:scale(1.03);}}
         h1,h2,h3 {{text-align:center;color:{mint_dark};}}
         .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
         .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
@@ -138,19 +134,20 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# Display generated questions and PDF options
+# Display generated questions and PDF handling
 # ----------------------------------------------------------------------
-if st.session_state.get("records"):
+if "records" in st.session_state:
     st.subheader("📝 Your Question List:")
     for rec in st.session_state.records:
         st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Your Question Set is Ready!</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download or Open Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
+    # Generate PDF
     cover_titles = [rec["title"] for rec in st.session_state.records]
 
     with st.spinner("Building PDF..."):
@@ -160,37 +157,36 @@ if st.session_state.get("records"):
             include_solutions=True,
         )
 
-    # Download Button
+    # Download button
     st.download_button(
         label="⬇️ Download Mint Maths PDF",
-        data=pdf_data.getvalue(),
+        data=pdf_data,
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
         use_container_width=True,
     )
 
-    # Open in new tab via JavaScript Blob
-    pdf_base64 = base64.b64encode(pdf_data.getvalue()).decode()
-    st.markdown(
+    # Open PDF in new tab button
+    pdf_base64 = base64.b64encode(pdf_data.getvalue()).decode("utf-8")
+    components.v1.html(
         f"""
         <script>
-            function openPdf() {{
-                const pdfData = atob("{pdf_base64}");
-                const uint8Array = new Uint8Array(pdfData.length);
-                for (let i = 0; i < pdfData.length; i++) {{
-                    uint8Array[i] = pdfData.charCodeAt(i);
-                }}
-                const blob = new Blob([uint8Array], {{ type: "application/pdf" }});
+            function openPdfInNewTab() {{
+                const pdfData = "{pdf_base64}";
+                const byteCharacters = atob(pdfData);
+                const byteNumbers = new Array(byteCharacters.length).fill(0).map((_, i) => byteCharacters.charCodeAt(i));
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {{ type: "application/pdf" }});
                 const blobUrl = URL.createObjectURL(blob);
                 window.open(blobUrl, "_blank");
             }}
         </script>
-        <button onclick="openPdf()" style="
+        <button onclick="openPdfInNewTab()" style="
             background-color: {mint_main}; color: {mint_text};
             border-radius: 8px; padding: 0.6em 1.2em; border: none;
-            font-weight: 600; cursor: pointer;">
+            font-weight: 600; cursor: pointer; margin-top: 10px;">
             🔗 Open PDF in New Tab
         </button>
         """,
-        unsafe_allow_html=True,
+        height=60,
     )
