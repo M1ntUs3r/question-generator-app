@@ -95,11 +95,11 @@ topics = sorted({q["topic"] for q in QUESTIONS if q["topic"]})
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    year = st.selectbox("Year", ["Select"] + years)
+    topic = st.selectbox("Topic", ["Select"] + topics)
 with col2:
     paper = st.selectbox("Paper", ["Select"] + papers)
 with col3:
-    topic = st.selectbox("Topic", ["Select"] + topics)
+    year = st.selectbox("Year", ["Select"] + years)
 
 year = None if year == "Select" else year
 paper = None if paper == "Select" else paper
