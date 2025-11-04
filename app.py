@@ -1,7 +1,7 @@
 import re
+import base64
 import streamlit as st
 import random
-import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -25,6 +25,7 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     return selection
 
+
 def short_question_label(question_id):
     """Return a concise label like Q7 from 2014_P1_Q07."""
     if not question_id:
@@ -36,6 +37,7 @@ def short_question_label(question_id):
         return f"Q{match.group(1)}"
     last_chunk = question_id.split("_")[-1].strip().upper()
     return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
+
 
 # ----------------------------------------------------------------------
 # Page configuration & CSS
@@ -136,7 +138,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# Display generated questions + PDF download and view
+# Display generated questions and PDF options
 # ----------------------------------------------------------------------
 if st.session_state.get("records"):
     st.subheader("📝 Your Question List:")
@@ -145,34 +147,50 @@ if st.session_state.get("records"):
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Your PDF</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Your Question Set is Ready!</h3>",
         unsafe_allow_html=True,
     )
 
     cover_titles = [rec["title"] for rec in st.session_state.records]
 
     with st.spinner("Building PDF..."):
-        pdf_bytes = build_pdf(
+        pdf_data = build_pdf(
             st.session_state.records,
             cover_titles=cover_titles,
             include_solutions=True,
         )
 
-    # Base64 encode PDF
-    pdf_data = pdf_bytes.getvalue()
-    pdf_base64 = base64.b64encode(pdf_data).decode()
-
-    # ✅ Button to open in a new tab
-    st.markdown(
-        f'<a href="data:application/pdf;base64,{pdf_base64}" target="_blank">🔗 Open PDF in New Tab</a>',
-        unsafe_allow_html=True,
-    )
-
-    # ✅ Button to download
+    # Download Button
     st.download_button(
         label="⬇️ Download Mint Maths PDF",
-        data=pdf_bytes,
+        data=pdf_data.getvalue(),
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
         use_container_width=True,
+    )
+
+    # Open in new tab via JavaScript Blob
+    pdf_base64 = base64.b64encode(pdf_data.getvalue()).decode()
+    st.markdown(
+        f"""
+        <script>
+            function openPdf() {{
+                const pdfData = atob("{pdf_base64}");
+                const uint8Array = new Uint8Array(pdfData.length);
+                for (let i = 0; i < pdfData.length; i++) {{
+                    uint8Array[i] = pdfData.charCodeAt(i);
+                }}
+                const blob = new Blob([uint8Array], {{ type: "application/pdf" }});
+                const blobUrl = URL.createObjectURL(blob);
+                window.open(blobUrl, "_blank");
+            }}
+        </script>
+        <button onclick="openPdf()" style="
+            background-color: {mint_main}; color: {mint_text};
+            border-radius: 8px; padding: 0.6em 1.2em; border: none;
+            font-weight: 600; cursor: pointer;">
+            🔗 Open PDF in New Tab
+        </button>
+        """,
+        unsafe_allow_html=True,
     )
