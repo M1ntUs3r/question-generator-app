@@ -1,6 +1,7 @@
 import re
 import streamlit as st
 import random
+import base64
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -19,7 +20,6 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    # deterministic ordering before and after sampling
     filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     selection = filtered if len(filtered) <= n else random.sample(filtered, n)
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
@@ -70,16 +70,9 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 National 5 Maths Question Generator</h1>
-    <p style='text-align:left;color:{mint_text};'>
-        Generate a list of random questions or use the optional filters below for
-        more focused revision. Once your list has been generated click the download
-        pdf button below to get your unique pdf with matching your questions and
-        marking schemes. Each pdf has a cover page with the generated questions listed
-        as a reminder.
-
-        Mr Devine - @OLSPMathsDepartment
-        
+    <h1>📘 Mint Maths Question Generator</h1>
+    <p style='text-align:center;color:{mint_text};'>
+        Generate random practice questions with optional filters below
     </p>
     """,
     unsafe_allow_html=True,
@@ -143,7 +136,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# Display generated questions and PDF download
+# Display generated questions + PDF download and view
 # ----------------------------------------------------------------------
 if st.session_state.get("records"):
     st.subheader("📝 Your Question List:")
@@ -152,7 +145,7 @@ if st.session_state.get("records"):
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Your PDF</h3>",
         unsafe_allow_html=True,
     )
 
@@ -165,6 +158,17 @@ if st.session_state.get("records"):
             include_solutions=True,
         )
 
+    # Base64 encode PDF
+    pdf_data = pdf_bytes.getvalue()
+    pdf_base64 = base64.b64encode(pdf_data).decode()
+
+    # ✅ Button to open in a new tab
+    st.markdown(
+        f'<a href="data:application/pdf;base64,{pdf_base64}" target="_blank">🔗 Open PDF in New Tab</a>',
+        unsafe_allow_html=True,
+    )
+
+    # ✅ Button to download
     st.download_button(
         label="⬇️ Download Mint Maths PDF",
         data=pdf_bytes,
