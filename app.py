@@ -70,8 +70,8 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 Mint Maths Generator - National 5 Maths </h1>
-    <p style='text-align:center;color:{mint_text};'>
+    <h1>📘 National 5 Maths Question Generator</h1>
+    <p style='text-align:left;color:{mint_text};'>
         Generate a list of random questions or use the optional filters below for
         more focused revision. Once your list has been generated click the download
         pdf button below to get your unique pdf with matching your questions and
