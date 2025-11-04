@@ -1,8 +1,6 @@
 import re
 import streamlit as st
 import random
-import base64
-from streamlit import components
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
@@ -55,6 +53,10 @@ st.markdown(
                            border-radius:8px!important;padding:0.6em 1.2em!important;
                            font-weight:500!important;transition:0.3s;}}
         .stButton button:hover {{background-color:#2b7a6d!important;transform:scale(1.03);}}
+        .stDownloadButton button {{background-color:{mint_main}!important;color:{mint_text}!important;
+                                   border-radius:8px!important;padding:0.6em 1.2em!important;
+                                   font-weight:600!important;transition:0.3s;}}
+        .stDownloadButton button:hover {{background-color:#95dec2!important;transform:scale(1.03);}}
         h1,h2,h3 {{text-align:center;color:{mint_dark};}}
         .block-container {{max-width:700px!important;margin:auto;padding-top:1rem;padding-bottom:3rem;}}
         .stSelectbox label,.stNumberInput label {{font-weight:600!important;color:{mint_text}!important;}}
@@ -68,9 +70,16 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 Mint Maths Question Generator</h1>
-    <p style='text-align:center;color:{mint_text};'>
-        Generate random practice questions with optional filters below
+    <h1>📘 National 5 Maths Question Generator</h1>
+    <p style='text-align:left;color:{mint_text};'>
+        Generate a list of random questions or use the optional filters below for
+        more focused revision. Once your list has been generated click the download
+        pdf button below to get your unique pdf with matching your questions and
+        marking schemes. Each pdf has a cover page with the generated questions listed
+        as a reminder.
+
+        Mr Devine - @OLSPMathsDepartment
+        
     </p>
     """,
     unsafe_allow_html=True,
@@ -134,59 +143,32 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# Display generated questions and PDF handling
+# Display generated questions and PDF download
 # ----------------------------------------------------------------------
-if "records" in st.session_state:
+if st.session_state.get("records"):
     st.subheader("📝 Your Question List:")
     for rec in st.session_state.records:
         st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download or Open Your Question Set</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
-    # Generate PDF
     cover_titles = [rec["title"] for rec in st.session_state.records]
 
     with st.spinner("Building PDF..."):
-        pdf_data = build_pdf(
+        pdf_bytes = build_pdf(
             st.session_state.records,
             cover_titles=cover_titles,
             include_solutions=True,
         )
 
-    # Download button
     st.download_button(
         label="⬇️ Download Mint Maths PDF",
-        data=pdf_data,
+        data=pdf_bytes,
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
         use_container_width=True,
-    )
-
-    # Open PDF in new tab button
-    pdf_base64 = base64.b64encode(pdf_data.getvalue()).decode("utf-8")
-    components.v1.html(
-        f"""
-        <script>
-            function openPdfInNewTab() {{
-                const pdfData = "{pdf_base64}";
-                const byteCharacters = atob(pdfData);
-                const byteNumbers = new Array(byteCharacters.length).fill(0).map((_, i) => byteCharacters.charCodeAt(i));
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], {{ type: "application/pdf" }});
-                const blobUrl = URL.createObjectURL(blob);
-                window.open(blobUrl, "_blank");
-            }}
-        </script>
-        <button onclick="openPdfInNewTab()" style="
-            background-color: {mint_main}; color: {mint_text};
-            border-radius: 8px; padding: 0.6em 1.2em; border: none;
-            font-weight: 600; cursor: pointer; margin-top: 10px;">
-            🔗 Open PDF in New Tab
-        </button>
-        """,
-        height=60,
     )
