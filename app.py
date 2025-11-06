@@ -70,9 +70,14 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 Mint Maths Question Generator</h1>
-    <p style='text-align:center; color:{mint_text};'>
-        Generate random practice questions with optional filters below
+    <h1>National 5 Maths Question Generator</h1>
+    <p style='text-align:left; color:{mint_text};'>
+        Generate random practice questions with optional filters below. 
+        Once your list has been generated, click the Download PDF button 
+        to download and view your unique pdf with matching questions and 
+        marking scheme pages.
+
+        Created by Mr Devine @OLSPMathsDepartment
     </p>
     """,
     unsafe_allow_html=True,
