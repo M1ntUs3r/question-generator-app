@@ -1,28 +1,13 @@
 import re
 import streamlit as st
 import random
-from modules.data_handler import QUESTIONS, META
+from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
 
 # ----------------------------------------------------------------------
-# Helper: pick unique questions (max one per topic)
+# Helper: pick random questions
 # ----------------------------------------------------------------------
-def generate_unique_random_questions(df, n=5):
-    """Pick up to `n` questions ensuring only one per topic."""
-    topic_map = {}
-    for q in df:
-        topic = q["topic"]
-        if topic not in topic_map:
-            topic_map[topic] = []
-        topic_map[topic].append(q)
-
-    # Pick one random question from each topic
-    unique_questions = [random.choice(items) for items in topic_map.values()]
-    return unique_questions[:n]  # limit to n
-
-
-def generate_filtered_questions(df, n=5, year=None, paper=None, topic=None):
-    """Apply filters, return up to `n` shuffled results."""
+def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
     if year:
         filtered = [q for q in filtered if q["year"] == year]
@@ -34,8 +19,23 @@ def generate_filtered_questions(df, n=5, year=None, paper=None, topic=None):
     if not filtered:
         return []
 
-    return random.sample(filtered, min(n, len(filtered)))
+    # deterministic ordering before and after sampling
+    filtered.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
+    selection = filtered if len(filtered) <= n else random.sample(filtered, n)
+    selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
+    return selection
 
+def short_question_label(question_id):
+    """Return a concise label like Q7 from 2014_P1_Q07."""
+    if not question_id:
+        return ""
+    if not isinstance(question_id, str):
+        return str(question_id)
+    match = re.search(r"q\s*0*(\d+)$", question_id, re.IGNORECASE)
+    if match:
+        return f"Q{match.group(1)}"
+    last_chunk = question_id.split("_")[-1].strip().upper()
+    return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
 
 # ----------------------------------------------------------------------
 # Page configuration & CSS
@@ -70,14 +70,16 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 Mint Maths Question Generator</h1>
-    <p style='text-align:center;color:{mint_text};'>
-        Generate random practice questions with optional filters below.
-        Once your list has been generated, click the Download PDF button
-        to download and view your unique pdf containging matching question
-        and marking scheme pages.
+    <h1>📘 National 5 Maths Question Generator</h1>
+    <p style='text-align:left;color:{mint_text};'>
+        Generate a list of random questions or use the optional filters below for
+        more focused revision. Once your list has been generated click the download
+        pdf button below to get your unique pdf with matching your questions and
+        marking schemes. Each pdf has a cover page with the generated questions listed
+        as a reminder.
 
-        Created by Mr Devine - @OLSPMathsDepartment
+        Mr Devine - @OLSPMathsDepartment
+        
     </p>
     """,
     unsafe_allow_html=True,
@@ -85,58 +87,68 @@ st.markdown(
 st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------
-# Dynamic Filters
+# Filters
 # ----------------------------------------------------------------------
-st.sidebar.header("🔍 Filters")
+years = sorted({q["year"] for q in QUESTIONS if q["year"]})
+papers = sorted({q["paper"] for q in QUESTIONS if q["paper"]})
+topics = sorted({q["topic"] for q in QUESTIONS if q["topic"]})
 
-years = META["years"]
-papers = META["papers"]
-topics = META["topics"]
+col1, col2, col3 = st.columns(3)
+with col1:
+    year = st.selectbox("Year", ["Select"] + years)
+with col2:
+    paper = st.selectbox("Paper", ["Select"] + papers)
+with col3:
+    topic = st.selectbox("Topic", ["Select"] + topics)
 
-year = st.sidebar.selectbox("Year", ["Any"] + years)
-paper = st.sidebar.selectbox("Paper", ["Any"] + papers)
-topic = st.sidebar.selectbox("Topic", ["Any"] + topics)
+year = None if year == "Select" else year
+paper = None if paper == "Select" else paper
+topic = None if topic == "Select" else topic
 
-# Resolve filter values
-year = None if year == "Any" else year
-paper = None if paper == "Any" else paper
-topic = None if topic == "Any" else topic
-
-# Question count (capped at 20)
-num_questions = st.sidebar.number_input(
+num_questions = st.number_input(
     "Number of Questions",
     min_value=1,
-    max_value=20,
+    max_value=30,
     value=5,
     step=1,
 )
 
 # ----------------------------------------------------------------------
-# Generate Questions
+# Generate questions
 # ----------------------------------------------------------------------
 if st.button("🎲 Generate Questions", use_container_width=True):
-    with st.spinner("Loading your questions..."):
-        if not (year or paper or topic):  # Random mode with no repeats
-            records = generate_unique_random_questions(QUESTIONS, n=num_questions)
-        else:
-            records = generate_filtered_questions(
-                QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic
-            )
+    with st.spinner("Selecting your random questions..."):
+        selection = generate_random_questions(
+            QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic
+        )
 
-    if not records:
-        st.warning("⚠️ No matching questions found.")
+    if not selection:
+        st.warning("⚠️ No questions found for the selected filters.")
         st.session_state.pop("records", None)
     else:
-        st.session_state["records"] = records
-        st.success(f"✅ {len(records)} question(s) generated!")
+        records = []
+        for row in selection:
+            label = short_question_label(row["question_id"])
+            records.append(
+                {
+                    "question_id": row["question_id"],
+                    "title": f"{label} – {row['year']} {row['paper']} – {row['topic']}",
+                    "pdf_question": row.get("pdf_question"),
+                    "q_pages": row.get("q_pages", ""),
+                    "pdf_solution": row.get("pdf_solution"),
+                    "s_pages": row.get("s_pages", ""),
+                }
+            )
+        st.session_state.records = records
+        st.success(f"✅ Generated {len(records)} question(s).")
 
 # ----------------------------------------------------------------------
-# Display questions & PDF download
+# Display generated questions and PDF download
 # ----------------------------------------------------------------------
 if st.session_state.get("records"):
     st.subheader("📝 Your Question List:")
-    for rec in st.session_state["records"]:
-        st.markdown(f"**{rec['question_id']} – {rec['year']} {rec['paper']} – {rec['topic']}**")
+    for rec in st.session_state.records:
+        st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
     st.markdown(
@@ -144,14 +156,15 @@ if st.session_state.get("records"):
         unsafe_allow_html=True,
     )
 
+    cover_titles = [rec["title"] for rec in st.session_state.records]
+
     with st.spinner("Building PDF..."):
         pdf_bytes = build_pdf(
-            st.session_state["records"],
-            cover_titles=[rec["question_id"] + " – " + rec["year"] + " " + rec["paper"] for rec in st.session_state["records"]],
-            include_solutions=True
+            st.session_state.records,
+            cover_titles=cover_titles,
+            include_solutions=True,
         )
 
-    # PDF Download
     st.download_button(
         label="⬇️ Download Mint Maths PDF",
         data=pdf_bytes,
