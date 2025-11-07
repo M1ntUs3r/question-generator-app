@@ -38,7 +38,7 @@ def load_questions():
     df["topic"] = df["topic"].astype(str).str.strip()
     df["question_id"] = df["question_id"].astype(str).str.strip()
 
-    # Clean question IDs like “_Q01” → “Q01”
+    # Clean question IDs like “_Q01” → “Q1”
     def clean_qid(qid):
         if not isinstance(qid, str):
             return ""
@@ -117,7 +117,7 @@ def build_pdf_cache(df):
 
 # ---------- Main Function ----------
 def prepare_questions():
-    """Load data, cache PDFs, and return structured question list and metadata."""
+    """Load data, cache PDFs, and return structured question list."""
     df = load_questions()
     pdf_cache = build_pdf_cache(df)
 
@@ -135,16 +135,9 @@ def prepare_questions():
         }
         questions.append(q)
 
-    # Build metadata for dynamic filtering
-    meta = {
-        "years": sorted({q["year"] for q in questions if q["year"]}),
-        "papers": sorted({q["paper"] for q in questions if q["paper"]}),
-        "topics": sorted({q["topic"] for q in questions if q["topic"]}),
-    }
-
     print(f"✅ Loaded {len(questions)} questions from {EXCEL_FILE}")
-    return questions, meta
+    return questions
 
 
-# ---------- Global Variables ----------
-QUESTIONS, META = prepare_questions()
+# ---------- Global Variable ----------
+QUESTIONS = prepare_questions()
