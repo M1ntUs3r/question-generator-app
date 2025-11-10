@@ -1,8 +1,11 @@
 import re
 import streamlit as st
 import random
+import uuid
+from pathlib import Path
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
+
 
 # ----------------------------------------------------------------------
 # Helper: pick random questions
@@ -25,6 +28,7 @@ def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     selection.sort(key=lambda x: (x["year"], 0 if x["paper"] == "P1" else 1))
     return selection
 
+
 def short_question_label(question_id):
     """Return a concise label like Q7 from 2014_P1_Q07."""
     if not question_id:
@@ -36,6 +40,7 @@ def short_question_label(question_id):
         return f"Q{match.group(1)}"
     last_chunk = question_id.split("_")[-1].strip().upper()
     return last_chunk if last_chunk.startswith("Q") else f"Q{last_chunk}"
+
 
 # ----------------------------------------------------------------------
 # Page configuration & CSS
@@ -65,6 +70,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ----------------------------------------------------------------------
 # Header
 # ----------------------------------------------------------------------
@@ -85,6 +91,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown("<hr style='border-top: 2px solid #d0f0e6;'>", unsafe_allow_html=True)
+
 
 # ----------------------------------------------------------------------
 # Filters
@@ -112,6 +119,7 @@ num_questions = st.number_input(
     value=5,
     step=1,
 )
+
 
 # ----------------------------------------------------------------------
 # Generate questions
@@ -142,6 +150,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
         st.session_state.records = records
         st.success(f"✅ Generated {len(records)} question(s).")
 
+
 # ----------------------------------------------------------------------
 # Display generated questions and PDF download
 # ----------------------------------------------------------------------
@@ -165,10 +174,46 @@ if st.session_state.get("records"):
             include_solutions=True,
         )
 
-    st.download_button(
-        label="Download PDF Questions + Answers",
-        data=pdf_bytes,
-        file_name="mintmaths_questions.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
+    # ✅ Save PDF to static folder
+    generated_dir = Path("static/generated")
+    generated_dir.mkdir(parents=True, exist_ok=True)
+    pdf_id = str(uuid.uuid4())[:8]
+    pdf_path = generated_dir / f"{pdf_id}.pdf"
+
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes.getvalue())
+
+    pdf_url = f"/static/generated/{pdf_id}.pdf"
+
+    # Two side-by-side buttons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.download_button(
+            label="Download PDF Questions + Answers",
+            data=pdf_bytes,
+            file_name="mintmaths_questions.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    with col2:
+        st.markdown(
+            f"""
+            <a href="{pdf_url}" target="_blank">
+                <button style="
+                    background-color:{mint_main};
+                    color:{mint_text};
+                    border:none;
+                    padding:0.6em 1.2em;
+                    border-radius:8px;
+                    font-weight:600;
+                    cursor:pointer;
+                    width:100%;
+                ">
+                📖 Open PDF in New Tab
+                </button>
+            </a>
+            """,
+            unsafe_allow_html=True,
+        )
