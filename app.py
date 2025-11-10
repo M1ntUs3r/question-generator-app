@@ -2,6 +2,7 @@ import re
 import streamlit as st
 import random
 import uuid
+import base64 
 from pathlib import Path
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
@@ -195,7 +196,7 @@ if st.session_state.get("records"):
 
     pdf_url = f"/static/generated/{pdf_id}.pdf"
 
-    import base64
+    
 
 # Two side-by-side buttons
 col1, col2 = st.columns(2)
