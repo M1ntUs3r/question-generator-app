@@ -77,8 +77,10 @@ st.markdown(
         pdf button below to get your unique pdf with matching your questions and
         marking schemes. Each pdf has a cover page with the generated questions listed
         as a reminder.
-
-        Mr Devine - @OLSPMathsDepartment
+        
+        Created by Mr Devine - @OLSPMathsDepartment
+        All PDFs courtesy of SQA
+        
         
     </p>
     """,
