@@ -177,6 +177,16 @@ if st.session_state.get("records"):
     # ✅ Save PDF to static folder
     generated_dir = Path("static/generated")
     generated_dir.mkdir(parents=True, exist_ok=True)
+
+    # 🧹 Auto-cleanup: remove old PDFs (>24h)
+    for f in generated_dir.glob("*.pdf"):
+        try:
+            if time.time() - f.stat().st_mtime > 86400:  # 24 hours
+                f.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Save new PDF
     pdf_id = str(uuid.uuid4())[:8]
     pdf_path = generated_dir / f"{pdf_id}.pdf"
 
