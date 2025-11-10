@@ -70,7 +70,7 @@ st.markdown(
 # ----------------------------------------------------------------------
 st.markdown(
     f"""
-    <h1>📘 National 5 Maths Question Generator</h1>
+    <h1>National 5 Maths Question Generator</h1>
     <p style='text-align:left;color:{mint_text};'>
         Generate a list of random questions or use the optional filters below for
         more focused revision. Once your list has been generated click the download
@@ -95,11 +95,11 @@ topics = sorted({q["topic"] for q in QUESTIONS if q["topic"]})
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    year = st.selectbox("Year", ["Select"] + years)
+    year = st.selectbox("Topic", ["Select"] + topics)
 with col2:
     paper = st.selectbox("Paper", ["Select"] + papers)
 with col3:
-    topic = st.selectbox("Topic", ["Select"] + topics)
+    topic = st.selectbox("Year", ["Select"] + years)
 
 year = None if year == "Select" else year
 paper = None if paper == "Select" else paper
@@ -108,7 +108,7 @@ topic = None if topic == "Select" else topic
 num_questions = st.number_input(
     "Number of Questions",
     min_value=1,
-    max_value=30,
+    max_value=20,
     value=5,
     step=1,
 )
@@ -146,13 +146,13 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 # Display generated questions and PDF download
 # ----------------------------------------------------------------------
 if st.session_state.get("records"):
-    st.subheader("📝 Your Question List:")
+    st.subheader("Generated Questions:")
     for rec in st.session_state.records:
         st.markdown(f"**{rec['title']}**")
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>📘 Download Your Question Set</h3>",
+        f"<h3 style='text-align:center;color:{mint_dark};'>Download Your Question Set</h3>",
         unsafe_allow_html=True,
     )
 
@@ -166,7 +166,7 @@ if st.session_state.get("records"):
         )
 
     st.download_button(
-        label="⬇️ Download Mint Maths PDF",
+        label="Download PDF Questions + Answers",
         data=pdf_bytes,
         file_name="mintmaths_questions.pdf",
         mime="application/pdf",
