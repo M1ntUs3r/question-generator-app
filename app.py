@@ -155,6 +155,7 @@ if st.button("🎲 Generate Questions", use_container_width=True):
 # ----------------------------------------------------------------------
 # Display generated questions and PDF download
 # ----------------------------------------------------------------------
+pdf_bytes = None
 if st.session_state.get("records"):
     st.subheader("Generated Questions:")
     for rec in st.session_state.records:
