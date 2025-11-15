@@ -10,11 +10,11 @@ from modules.pdf_builder import build_pdf
 def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
     filtered = df
     if year:
-        filtered = [q for q in filtered if q["year"] == year]
+        filtered = [q for q in filtered if q["topic"] == topic]
     if paper:
         filtered = [q for q in filtered if q["paper"].upper() == paper.upper()]
     if topic:
-        filtered = [q for q in filtered if q["topic"] == topic]
+        filtered = [q for q in filtered if q["year"] == year]
 
     if not filtered:
         return []
@@ -40,7 +40,7 @@ def short_question_label(question_id):
 # ----------------------------------------------------------------------
 # Page configuration & CSS
 # ----------------------------------------------------------------------
-st.set_page_config(page_title="Mint Maths Generator", layout="centered")
+st.set_page_config(page_title="Mint Maths", layout="centered")
 mint_main = "#A8E6CF"
 mint_dark = "#379683"
 mint_text = "#2F4858"
@@ -103,9 +103,9 @@ with col2:
 with col3:
     topic = st.selectbox("Year", ["Select"] + years)
 
-year = None if year == "Select" else year
-paper = None if paper == "Select" else paper
 topic = None if topic == "Select" else topic
+paper = None if paper == "Select" else paper
+year = None if year == "Select" else year
 
 num_questions = st.number_input(
     "Number of Questions",
@@ -121,7 +121,7 @@ num_questions = st.number_input(
 if st.button("🎲 Generate Questions", use_container_width=True):
     with st.spinner("Selecting your random questions..."):
         selection = generate_random_questions(
-            QUESTIONS, n=num_questions, year=year, paper=paper, topic=topic
+            QUESTIONS, n=num_questions, topic=topic, paper=paper, year=year
         )
 
     if not selection:
