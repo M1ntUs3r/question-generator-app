@@ -7,7 +7,7 @@ from modules.pdf_builder import build_pdf
 # ----------------------------------------------------------------------
 # Helper: pick random questions
 # ----------------------------------------------------------------------
-def generate_random_questions(df, n=5, year=None, paper=None, topic=None):
+def generate_random_questions(df, n=5, topic=None, paper=None, year=None):
     filtered = df
     if year:
         filtered = [q for q in filtered if q["topic"] == topic]
