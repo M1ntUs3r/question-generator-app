@@ -1,8 +1,18 @@
 import re
 import streamlit as st
 import random
+import os
+import requests
+import logging
+from odf.opendocument import load
+from odf.table import Table, TableRow, TableCell
 from modules.data_handler import QUESTIONS
 from modules.pdf_builder import build_pdf
+
+# ----------------------------------------------------------------------
+# Setup Logging
+# ----------------------------------------------------------------------
+logging.basicConfig(level=logging.DEBUG)
 
 # ----------------------------------------------------------------------
 # Helper: pick random questions
@@ -66,6 +76,42 @@ st.markdown(
 )
 
 # ----------------------------------------------------------------------
+# PDF Caching Logic: Fetch and parse .ods file
+# ----------------------------------------------------------------------
+def fetch_pdf_links_from_ods(ods_url):
+    """Fetch and extract PDF links from a remote .ods file stored on GitHub."""
+    try:
+        logging.info("Downloading .ods file...")
+        response = requests.get(ods_url)
+        response.raise_for_status()  # Will raise an exception for bad status
+        with open("temp.ods", "wb") as f:
+            f.write(response.content)
+
+        logging.info("Successfully downloaded .ods file.")
+
+        # Parse the .ods file
+        doc = load("temp.ods")
+        sheet = doc.getElementsByType(Table)[0]  # Assuming first table
+        pdf_links = []
+
+        for row in sheet.getElementsByType(TableRow):
+            cells = row.getElementsByType(TableCell)
+            for cell in cells:
+                text = ''.join([x.data for x in cell.getElementsByType(Text)])
+                if text.startswith('http'):  # Check if it's a link
+                    pdf_links.append(text)
+
+        logging.info(f"Found {len(pdf_links)} PDF links.")
+        return pdf_links
+
+    except Exception as e:
+        logging.error(f"Failed to fetch or parse .ods file: {str(e)}")
+        return []
+
+# Fetch PDFs dynamically on startup
+pdf_urls = fetch_pdf_links_from_ods("https://raw.githubusercontent.com/yourusername/yourrepo/main/yourfile.ods")  # Replace with actual URL
+
+# ----------------------------------------------------------------------
 # Header
 # ----------------------------------------------------------------------
 st.markdown(
@@ -80,8 +126,6 @@ st.markdown(
         
         Created by Mr Devine - @OLSPMathsDepartment
         All PDFs courtesy of SQA
-        
-        
     </p>
     """,
     unsafe_allow_html=True,
@@ -154,23 +198,4 @@ if st.session_state.get("records"):
 
     st.markdown("---")
     st.markdown(
-        f"<h3 style='text-align:center;color:{mint_dark};'>Download Your Question Set</h3>",
-        unsafe_allow_html=True,
-    )
-
-    cover_titles = [rec["title"] for rec in st.session_state.records]
-
-    with st.spinner("Building PDF..."):
-        pdf_bytes = build_pdf(
-            st.session_state.records,
-            cover_titles=cover_titles,
-            include_solutions=True,
-        )
-
-    st.download_button(
-        label="Download PDF Questions + Answers",
-        data=pdf_bytes,
-        file_name="mintmaths_questions.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
+        f"<h3 style='text-align:center;color:{mint_dark};'>Download Your Question Set</h3
